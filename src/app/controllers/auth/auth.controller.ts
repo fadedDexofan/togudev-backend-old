@@ -14,7 +14,7 @@ import {
 import { InjectRepository } from "typeorm-typedi-extensions";
 
 import { Service } from "typedi";
-import { RefreshToken, User } from "../../../db/entities";
+import { Profile, RefreshToken, User } from "../../../db/entities";
 import {
   RefreshRepository,
   RoleRepository,
@@ -63,6 +63,7 @@ export class AuthController {
     newUser.email = email;
     newUser.password = password;
     newUser.roles = [role];
+    newUser.profile = new Profile();
 
     try {
       const createdUser: User = await this.userRepository.save(newUser);
