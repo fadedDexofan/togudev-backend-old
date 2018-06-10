@@ -1,6 +1,8 @@
 import {
+  Authorized,
   Body,
   Get,
+  HttpCode,
   HttpError,
   InternalServerError,
   JsonController,
@@ -36,6 +38,8 @@ export class DirectionController {
     return direction;
   }
 
+  @HttpCode(201)
+  @Authorized(["admin"])
   @Post()
   public async createDirection(@Body() directionData: Direction) {
     const { name, mentors, description } = directionData;
