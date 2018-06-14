@@ -4,7 +4,6 @@ import { getCustomRepository } from "typeorm";
 
 import { UserRepository } from "../../db/repositories";
 import { JWTService } from "../../services";
-import { extractToken } from "../../utils";
 
 const jwtService = Container.get(JWTService);
 
@@ -12,7 +11,7 @@ export async function authorizationChecker(
   ctx: Context,
   roles: string[],
 ): Promise<boolean> {
-  const token = extractToken(ctx.request.headers);
+  const token = jwtService.extractToken(ctx.request.headers);
   const payload: any = await jwtService.verify(token);
   if (!payload) {
     return false;

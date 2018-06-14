@@ -16,6 +16,13 @@ export class JWTService {
     return verify(token, JWT_SECRET);
   }
 
+  public extractToken(headers: any) {
+    let token: string =
+      headers && headers.authorization ? headers.authorization : "";
+    token = token.replace(/Bearer\s+/gm, "");
+    return token;
+  }
+
   public async makeAccessToken(user: User) {
     const configAccess = {
       payload: {

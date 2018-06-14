@@ -2,5 +2,9 @@
   "auth": {
     "jwtSecret": "secret",
     "saltRounds": 10
+  },
+  "sms": {
+    "api_id": "4F120143-159F-B483-6611-242A00E2B90B",
+    "from": "TOGUDEV"
   }
 }

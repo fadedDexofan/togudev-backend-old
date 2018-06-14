@@ -27,6 +27,7 @@
     "e2e:test": "npm run build-ts && cross-env NODE_ENV=test mocha ./dist/app/controllers/**/*.controller.test.js --timeout 5000 --exit"
   },
   "dependencies": {
+    "axios": "^0.18.0",
     "bcryptjs": "^2.4.3",
     "class-transformer": "^0.1.9",
     "class-validator": "^0.8.5",
@@ -38,6 +39,7 @@
     "koa": "^2.5.1",
     "koa-bodyparser": "^4.2.1",
     "koa-router": "^7.4.0",
+    "moment": "^2.22.2",
     "pg": "^7.4.3",
     "reflect-metadata": "^0.1.12",
     "routing-controllers": "^0.7.7",
@@ -45,6 +47,7 @@
     "typedi": "^0.7.3",
     "typeorm": "^0.2.7",
     "typeorm-typedi-extensions": "^0.2.1",
+    "validator": "^10.3.0",
     "winston": "github:winstonjs/winston"
   },
   "devDependencies": {
@@ -61,6 +64,7 @@
     "@types/node": "^10.3.2",
     "@types/shelljs": "^0.8.0",
     "@types/supertest": "^2.0.4",
+    "@types/validator": "^9.4.1",
     "chai": "^4.1.2",
     "chai-http": "^4.0.0",
     "cross-env": "^5.1.6",

@@ -5,3 +5,4 @@ export * from "./direction.entity";
 export * from "./rating.entity";
 export * from "./ratingTransaction.entity";
 export * from "./profile.entity";
+export * from "./phoneVerification.entity";

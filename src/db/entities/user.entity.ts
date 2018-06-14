@@ -1,4 +1,4 @@
-import { IsEmail, IsMobilePhone, MaxLength, MinLength } from "class-validator";
+import { IsMobilePhone, MaxLength, MinLength } from "class-validator";
 import { Container } from "typedi";
 import {
   BeforeInsert,
@@ -27,9 +27,6 @@ export class User {
   @IsMobilePhone("ru-RU")
   @Column({ unique: true })
   public phoneNumber: string;
-  @IsEmail()
-  @Column({ unique: true })
-  public email: string;
   @OneToMany((type) => RefreshToken, (refreshToken) => refreshToken.user, {
     cascade: true,
   })
