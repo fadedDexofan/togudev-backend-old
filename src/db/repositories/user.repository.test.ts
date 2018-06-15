@@ -28,18 +28,16 @@ describe("unit test: user repository", async () => {
   it("should create user", async () => {
     const user = await getCustomRepository(UserRepository).save({
       phoneNumber: "+79999999999",
-      email: "testuser@mail.com",
       password: "12345678",
       roles: [{ id: 1, name: "user" }],
     });
     expect(user).to.have.property("phoneNumber", "+79999999999");
-    expect(user).to.have.property("email", "testuser@mail.com");
     expect(user.roles).to.deep.equals([{ id: 1, name: "user" }]);
   });
 
   it("should fail to create user", async () => {
     const user = new User();
-    user.email = "testuser@mail.com";
+    user.phoneNumber = "+79999999999";
     user.roles = [{ id: 1, name: "user" }];
     user.password = "123456780";
     try {
@@ -54,14 +52,13 @@ describe("unit test: user repository", async () => {
     expect(users).that.not.eql([]);
     const user = users![0];
     expect(user).to.have.property("phoneNumber", "+79999999999");
-    expect(user).to.have.property("email", "testuser@mail.com");
     expect(user.roles).to.deep.equals([{ id: 1, name: "user" }]);
   });
 
   it("should get user by username", async () => {
-    const user = await getCustomRepository(UserRepository).getUserByEmail(
-      "testuser@mail.com",
+    const user = await getCustomRepository(UserRepository).getUserByPhone(
+      "+79999999999",
     );
-    expect(user).to.have.property("email", "testuser@mail.com");
+    expect(user).to.have.property("phoneNumber", "+79999999999");
   });
 });

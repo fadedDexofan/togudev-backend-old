@@ -48,8 +48,9 @@ export class User {
   public mentions?: Direction[];
   @ManyToMany((type) => Direction, (direction) => direction.participants, {
     cascade: true,
+    eager: true,
   })
-  public directions?: Direction[];
+  public directions: Direction[];
   @OneToOne((type) => Profile, { cascade: true, eager: true })
   @JoinColumn()
   public profile: Profile;

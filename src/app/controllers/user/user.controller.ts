@@ -27,7 +27,7 @@ export class UserController {
     private jwtService: JWTService,
   ) {}
   @Authorized(["user"])
-  @Get("/profile/current")
+  @Get("/profile")
   public async profile(@Ctx() ctx: Context, @CurrentUser() user: User) {
     if (!user) {
       return new NotFoundError("User not found");
@@ -35,7 +35,7 @@ export class UserController {
     return user;
   }
   @Authorized(["user"])
-  @Get("/:uuid")
+  @Get("/profile/:uuid")
   @OnUndefined(UserNotFoundError)
   public async getUser(@Param("uuid") uuid: string) {
     return this.userRepository.getUserByUuid(uuid);

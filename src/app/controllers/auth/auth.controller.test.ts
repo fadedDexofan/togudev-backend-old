@@ -26,13 +26,11 @@ describe("e2e test: AuthController", async () => {
     it("should register user", async () => {
       const response = await server.post("/api/auth/register").send({
         phoneNumber: "+79999999999",
-        email: "testname@mail.com",
         password: "12345678",
       });
       expect(response.status).equals(201);
       expect(response.body).to.have.property("uuid");
       expect(response.body).to.have.property("phoneNumber", "+79999999999");
-      expect(response.body).to.have.property("email", "testname@mail.com");
       expect(response.body).to.have.property("roles");
       expect(response.body.roles).to.deep.equal([{ id: 1, name: "user" }]);
     });
@@ -40,7 +38,6 @@ describe("e2e test: AuthController", async () => {
     it("should return user duplication error", async () => {
       const response = await server.post("/api/auth/register").send({
         phoneNumber: "+79999999999",
-        email: "testname@mail.com",
         password: "12345678",
       });
       expect(response.status).equals(400);

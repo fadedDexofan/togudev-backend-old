@@ -1,9 +1,11 @@
 import {
   Authorized,
+  BadRequestError,
   Body,
+  BodyParam,
+  CurrentUser,
   Get,
   HttpCode,
-  HttpError,
   InternalServerError,
   JsonController,
   NotFoundError,
@@ -11,11 +13,13 @@ import {
   Param,
   Post,
 } from "routing-controllers";
+import { Service } from "typedi";
 import { InjectRepository } from "typeorm-typedi-extensions";
 
-import { Service } from "typedi";
-import { Direction } from "../../../db/entities";
+import { Direction, User } from "../../../db/entities";
+import { Application } from "../../../db/entities/application.entity";
 import { DirectionRepository, UserRepository } from "../../../db/repositories";
+import { ApplicationRepository } from "../../../db/repositories/application.repository";
 
 @Service()
 @JsonController("/directions")
@@ -23,6 +27,7 @@ export class DirectionController {
   constructor(
     @InjectRepository() private userRepository: UserRepository,
     @InjectRepository() private directionRepository: DirectionRepository,
+    @InjectRepository() private applicationRepository: ApplicationRepository,
   ) {}
 
   @Get()
@@ -31,10 +36,34 @@ export class DirectionController {
     return directions;
   }
 
+  @HttpCode(201)
+  @Authorized(["user"])
+  @Post("/apply")
+  public async applyToDirection(
+    @CurrentUser() user: User,
+    @BodyParam("directionId") directionId: number,
+  ) {
+    const direction = await this.directionRepository.findOne(directionId);
+    if (!direction) {
+      throw new NotFoundError(`Направление с id ${directionId} не найдено`);
+    }
+    const application = new Application();
+    application.direction = direction;
+    application.user = user;
+    try {
+      await this.applicationRepository.save(application);
+      return { message: "Заявка успешно создана", application };
+    } catch (err) {
+      throw new InternalServerError("Ошибка создания заявки");
+    }
+  }
+
   @Get("/:id")
   @OnUndefined(NotFoundError)
   public async getDirection(@Param("id") id: number) {
-    const direction = await this.directionRepository.findOne(id);
+    const direction = await this.directionRepository.findOne(id, {
+      relations: ["participants", "mentors"],
+    });
     return direction;
   }
 
@@ -49,7 +78,7 @@ export class DirectionController {
       { relations: ["mentors"] },
     );
     if (dupDirection) {
-      throw new HttpError(403, "Direction already exist");
+      throw new BadRequestError("Направление уже существует");
     }
 
     const mentorsData = await this.userRepository.findByIds(mentors);

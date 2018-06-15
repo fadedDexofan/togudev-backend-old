@@ -11,10 +11,6 @@ export class UserRepository extends Repository<User> {
     return this.findOne({ phoneNumber });
   }
 
-  public async getUserByEmail(email: string): Promise<User | undefined> {
-    return this.findOne({ email });
-  }
-
   public async getAllUsers(): Promise<User[] | undefined> {
     return this.find();
   }

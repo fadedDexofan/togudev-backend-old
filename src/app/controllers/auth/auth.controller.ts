@@ -60,8 +60,10 @@ export class AuthController {
 
   @HttpCode(201)
   @Post("/register")
-  public async register(@Ctx() ctx: Context, @Body() userData: User) {
-    const { password } = userData;
+  public async register(
+    @Ctx() ctx: Context,
+    @BodyParam("password") password: string,
+  ) {
     const phoneToken = this.jwtService.extractToken(ctx.headers);
     if (!phoneToken) {
       throw new BadRequestError(
@@ -248,6 +250,7 @@ export class AuthController {
       searchResult = new PhoneVerification();
       searchResult.phoneNumber = phoneNumber;
       searchResult.verificationCode = generatedCode;
+      searchResult.attempts = 0;
       searchResult = await this.phoneVerificationRepository.create(
         searchResult,
       );
@@ -298,9 +301,6 @@ export class AuthController {
     }
     if (!searchResult) {
       throw new BadRequestError("Заявка на подтверждение не найдена");
-    }
-    if (searchResult.status) {
-      throw new BadRequestError("Номер уже подтвержден");
     }
     const isCodeWrong =
       searchResult.verificationCode !== Number(verificationCode);
