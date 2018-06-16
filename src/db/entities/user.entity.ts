@@ -36,22 +36,21 @@ export class User {
   @Column({ type: "text", select: false })
   public password: string;
 
-  @ManyToMany((type) => Role, { eager: true })
+  @ManyToMany((type) => Role)
   @JoinTable({ name: "user_roles" })
   public roles: Role[];
 
   @OneToMany((type) => RatingTransaction, (transaction) => transaction.author)
-  public mentorTransactions?: RatingTransaction[];
+  public mentorTransactions: RatingTransaction[];
   @OneToMany((type) => Rating, (rating) => rating.ratingOwner)
-  public userRatings?: Rating[];
+  public userRatings: Rating[];
   @ManyToMany((type) => Direction, (direction) => direction.mentors)
-  public mentions?: Direction[];
+  public mentions: Direction[];
   @ManyToMany((type) => Direction, (direction) => direction.participants, {
     cascade: true,
-    eager: true,
   })
   public directions: Direction[];
-  @OneToOne((type) => Profile, { cascade: true, eager: true })
+  @OneToOne((type) => Profile, { cascade: true })
   @JoinColumn()
   public profile: Profile;
   @CreateDateColumn() public createdAt?: Date;

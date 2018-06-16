@@ -13,15 +13,19 @@ export async function authorizationChecker(
 ): Promise<boolean> {
   const token = jwtService.extractToken(ctx.request.headers);
   const payload: any = await jwtService.verify(token);
+
   if (!payload) {
     return false;
   }
+
   const userFromToken = await getCustomRepository(UserRepository).getUserByUuid(
     payload.sub,
   );
+
   if (!userFromToken) {
     return false;
   }
+
   if (roles && roles.length) {
     const userRoles = userFromToken.roles.map((role) => role.name);
     const isAuthorized = roles.every((role: string) =>
@@ -31,5 +35,6 @@ export async function authorizationChecker(
       return false;
     }
   }
+
   return true;
 }

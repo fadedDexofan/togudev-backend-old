@@ -5,7 +5,7 @@ import { Service } from "typedi";
 
 @Service()
 export class SMSService {
-  public async sendSMS(phoneNumber: string, message: string) {
+  public async sendSMS(phoneNumber: string, message: string): Promise<number> {
     const reqOptions: AxiosRequestConfig = {
       method: "get",
       url: "https://sms.ru/sms/send",
@@ -21,12 +21,9 @@ export class SMSService {
 
     try {
       const resp = await axios(reqOptions);
-      // Код успеха
-      if (resp.data.status_code === 100) {
-        return true;
-      } else {
-        return false;
-      }
+      // Код ответа
+      // http://sms.ru/api/status
+      return resp.data.status_code;
     } catch (error) {
       throw new Error(error);
     }

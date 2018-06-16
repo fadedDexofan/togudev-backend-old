@@ -13,6 +13,9 @@ import { InjectRepository } from "typeorm-typedi-extensions";
 import { UserRepository } from "../../../db/repositories";
 import { ApplicationRepository } from "../../../db/repositories/application.repository";
 
+import { Rating } from "../../../db/entities";
+import { logger, Raven } from "../../../utils";
+
 @Service()
 @JsonController("/applications")
 export class ApplicationController {
@@ -25,6 +28,7 @@ export class ApplicationController {
   @Authorized(["mentor"])
   public async getApplications() {
     const applications = await this.applicationRepository.find();
+
     return applications;
   }
 
@@ -32,20 +36,30 @@ export class ApplicationController {
   @Get("/:uuid/approve")
   public async approveApplication(@Param("uuid") uuid: string) {
     const application = await this.applicationRepository.findOne(uuid, {
-      relations: ["user", "direction"],
+      relations: ["user", "direction", "user.userRatings"],
     });
+
     if (!application) {
       throw new NotFoundError("Заявка не найдена");
     }
+
     const user = application.user;
     const direction = application.direction;
     user.directions.push(direction);
+
+    const rating = new Rating();
+    rating.ratingOwner = user;
+    rating.direction = direction;
+    rating.value = 0;
+    user.userRatings.push(rating);
 
     try {
       await this.applicationRepository.remove(application);
       await this.userRepository.save(user);
       return { message: "Заявка успешно подтверждена" };
     } catch (err) {
+      logger.error(err);
+      Raven.captureException(err);
       throw new InternalServerError("Ошибка принятия заявки");
     }
   }
@@ -63,6 +77,8 @@ export class ApplicationController {
       await this.applicationRepository.remove(application);
       return { message: "Заявка успешно отклонена" };
     } catch (err) {
+      logger.error(err);
+      Raven.captureException(err);
       throw new InternalServerError("Ошибка отклонения заявки");
     }
   }

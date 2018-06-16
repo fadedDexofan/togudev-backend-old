@@ -16,10 +16,15 @@ import {
 import { Service } from "typedi";
 import { InjectRepository } from "typeorm-typedi-extensions";
 
-import { Direction, User } from "../../../db/entities";
-import { Application } from "../../../db/entities/application.entity";
-import { DirectionRepository, UserRepository } from "../../../db/repositories";
-import { ApplicationRepository } from "../../../db/repositories/application.repository";
+import { Application, Direction, User } from "../../../db/entities";
+
+import {
+  ApplicationRepository,
+  DirectionRepository,
+  RatingRepository,
+  UserRepository,
+} from "../../../db/repositories";
+import { logger, Raven } from "../../../utils";
 
 @Service()
 @JsonController("/directions")
@@ -28,11 +33,13 @@ export class DirectionController {
     @InjectRepository() private userRepository: UserRepository,
     @InjectRepository() private directionRepository: DirectionRepository,
     @InjectRepository() private applicationRepository: ApplicationRepository,
+    @InjectRepository() private ratingRepository: RatingRepository,
   ) {}
 
   @Get()
   public async getDirections() {
     const directions = await this.directionRepository.find();
+
     return directions;
   }
 
@@ -44,16 +51,22 @@ export class DirectionController {
     @BodyParam("directionId") directionId: number,
   ) {
     const direction = await this.directionRepository.findOne(directionId);
+
     if (!direction) {
       throw new NotFoundError(`Направление с id ${directionId} не найдено`);
     }
+
     const application = new Application();
     application.direction = direction;
     application.user = user;
+
     try {
       await this.applicationRepository.save(application);
+
       return { message: "Заявка успешно создана", application };
     } catch (err) {
+      logger.error(err);
+      Raven.captureException(err);
       throw new InternalServerError("Ошибка создания заявки");
     }
   }
@@ -64,7 +77,36 @@ export class DirectionController {
     const direction = await this.directionRepository.findOne(id, {
       relations: ["participants", "mentors"],
     });
+
     return direction;
+  }
+
+  @Authorized(["user"])
+  @Get("/:id/ratings")
+  public async getAllDirectionRatings(
+    @Param("id") id: number,
+    @Param("limit") limit?: number,
+    @Param("offset") offset?: number,
+  ) {
+    if (limit) {
+      limit = limit <= 0 ? 1 : limit;
+    }
+    if (offset) {
+      offset = offset < 0 ? 0 : offset;
+    }
+
+    const direction = await this.directionRepository.findOne(id);
+
+    if (!direction) {
+      throw new NotFoundError("Направление не найдено");
+    }
+
+    return this.ratingRepository.find({
+      relations: ["user", "direction"],
+      where: { direction },
+      take: limit,
+      skip: offset,
+    });
   }
 
   @HttpCode(201)
@@ -77,6 +119,7 @@ export class DirectionController {
       { name },
       { relations: ["mentors"] },
     );
+
     if (dupDirection) {
       throw new BadRequestError("Направление уже существует");
     }
@@ -87,13 +130,17 @@ export class DirectionController {
     newDirection.name = name;
     newDirection.description = description;
     newDirection.mentors = mentorsData;
+
     try {
       const createdDirection: Direction = await this.directionRepository.save(
         newDirection,
       );
+
       return createdDirection;
     } catch (err) {
-      throw new InternalServerError(err);
+      logger.error(err);
+      Raven.captureException(err);
+      throw new InternalServerError("Ошибка создания направления");
     }
   }
 }

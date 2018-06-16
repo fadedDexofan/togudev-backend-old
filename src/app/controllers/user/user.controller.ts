@@ -11,9 +11,9 @@ import {
 } from "routing-controllers";
 import { Service } from "typedi";
 import { InjectRepository } from "typeorm-typedi-extensions";
+
 import { User } from "../../../db/entities";
-import { RefreshRepository, UserRepository } from "../../../db/repositories";
-import { JWTService } from "../../../services/jwt.service";
+import { RatingRepository, UserRepository } from "../../../db/repositories";
 import { UserNotFoundError } from "../../errors";
 
 @Service()
@@ -21,17 +21,15 @@ import { UserNotFoundError } from "../../errors";
 export class UserController {
   constructor(
     @InjectRepository() private userRepository: UserRepository,
-    // tslint:disable-next-line
-    @InjectRepository() private refreshRepository: RefreshRepository,
-    // tslint:disable-next-line
-    private jwtService: JWTService,
+    @InjectRepository() private ratingRepository: RatingRepository,
   ) {}
   @Authorized(["user"])
   @Get("/profile")
   public async profile(@Ctx() ctx: Context, @CurrentUser() user: User) {
     if (!user) {
-      return new NotFoundError("User not found");
+      return new NotFoundError("Текущий пользователь не найден");
     }
+
     return user;
   }
   @Authorized(["user"])
@@ -39,5 +37,20 @@ export class UserController {
   @OnUndefined(UserNotFoundError)
   public async getUser(@Param("uuid") uuid: string) {
     return this.userRepository.getUserByUuid(uuid);
+  }
+
+  @Authorized(["user"])
+  @Get("/profile/:uuid/ratings")
+  public async getUserRatings(@Param("uuid") uuid: string) {
+    const user = await this.userRepository.findOne(uuid);
+    if (!user) {
+      throw new UserNotFoundError();
+    }
+    const userRatings = await this.ratingRepository.find({
+      where: { ratingOwner: user },
+      relations: ["transaction"],
+    });
+
+    return userRatings;
   }
 }

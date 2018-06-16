@@ -34,6 +34,7 @@ import {
 } from "../../../db/repositories";
 import { JWTService } from "../../../services";
 import { SMSService } from "../../../services/sms.service";
+import { logger, Raven } from "../../../utils";
 import {
   BadRefreshTokenError,
   UserAlreadyExistsError,
@@ -84,10 +85,16 @@ export class AuthController {
 
     let role = await this.roleRepository.getRoleByName("user");
     if (!role) {
-      await this.roleRepository.createRole("user");
+      try {
+        await this.roleRepository.createRole("user");
+      } catch (err) {
+        logger.error(err);
+        Raven.captureException(err);
+        throw new InternalServerError('Не удалось создать роль "user"');
+      }
       role = await this.roleRepository.getRoleByName("user");
       if (!role) {
-        throw new HttpError(500, "Role creation error");
+        throw new InternalServerError("Ошибка создания роли");
       }
     }
 
@@ -105,10 +112,12 @@ export class AuthController {
     } catch (err) {
       if (err.name === "QueryFailedError") {
         throw new UserAlreadyExistsError(
-          "User with this credentials already exists",
+          "Пользователь с данным телефоном уже зарегистрирован",
         );
       } else {
-        throw new InternalServerError(err);
+        logger.error(err);
+        Raven.captureException(err);
+        throw new InternalServerError("Ошибка регистрации");
       }
     }
   }
@@ -130,7 +139,7 @@ export class AuthController {
       .getOne();
 
     if (!user) {
-      throw new UserNotFoundError("User with this credentials not found");
+      throw new UserNotFoundError("Пользователь с таким логином не найден");
     }
 
     const passwordIsCorrect = await user.checkPassword(password);
@@ -152,13 +161,19 @@ export class AuthController {
 
     user.refreshTokens!.push(rToken);
 
-    await this.userRepository.save(user);
+    try {
+      await this.userRepository.save(user);
 
-    return {
-      accessToken: accessToken.token,
-      refreshToken,
-      expires_in: accessToken.exp,
-    };
+      return {
+        accessToken: accessToken.token,
+        refreshToken,
+        expires_in: accessToken.exp,
+      };
+    } catch (err) {
+      logger.error(err);
+      Raven.captureException(err);
+      throw new InternalServerError("Ошибка входа");
+    }
   }
 
   @Post("/refresh-tokens")
@@ -179,17 +194,31 @@ export class AuthController {
       },
     });
     if (!tokenInDB) {
-      throw new NotFoundError("Token not found");
+      throw new NotFoundError("Токен не найден");
     }
     try {
       const _valid = await this.jwtService.verify(refreshToken);
     } catch (err) {
-      await this.refreshRepository.remove(tokenInDB);
-      throw new HttpError(403, "Invalid Refresh Token");
+      try {
+        await this.refreshRepository.remove(tokenInDB);
+      } catch (err) {
+        logger.error(err);
+        Raven.captureException(err);
+        throw new InternalServerError("Ошибка удаления токена");
+      }
+      throw new HttpError(403, "Некорректный Refresh токен");
     }
+
     if (expired) {
-      await this.refreshRepository.remove(tokenInDB);
+      try {
+        await this.refreshRepository.remove(tokenInDB);
+      } catch (err) {
+        logger.error(err);
+        Raven.captureException(err);
+        throw new InternalServerError("Ошибка удаления токена");
+      }
     }
+
     const newAccessToken = await this.jwtService.makeAccessToken(
       tokenInDB.user,
     );
@@ -200,13 +229,20 @@ export class AuthController {
     const rToken = new RefreshToken();
     rToken.refreshToken = newRefreshToken;
     rToken.user = tokenInDB.user;
-    await this.refreshRepository.save(rToken);
 
-    return {
-      accessToken: newAccessToken.token,
-      refreshToken: newRefreshToken,
-      expires_in: newAccessToken.exp,
-    };
+    try {
+      await this.refreshRepository.save(rToken);
+
+      return {
+        accessToken: newAccessToken.token,
+        refreshToken: newRefreshToken,
+        expires_in: newAccessToken.exp,
+      };
+    } catch (err) {
+      logger.error(err);
+      Raven.captureException(err);
+      throw new InternalServerError("Ошибка сохранения токена");
+    }
   }
 
   @Authorized(["user"])
@@ -215,12 +251,16 @@ export class AuthController {
     const userTokens = await this.refreshRepository.find({
       where: { user: user.uuid },
     });
+
     try {
       await this.refreshRepository.remove(userTokens);
+
       return {
-        message: "User tokens successfully reseted. You need to relogin",
+        message: "Токены отозваны. Перезайдите в систему",
       };
     } catch (err) {
+      logger.error(err);
+      Raven.captureException(err);
       throw new InternalServerError(err);
     }
   }
@@ -230,6 +270,7 @@ export class AuthController {
     @BodyParam("phoneNumber") phoneNumber: string,
   ) {
     const generatedCode = getRandomInt(1000, 10000);
+
     if (!isMobilePhone(phoneNumber, "ru-RU")) {
       throw new BadRequestError("Номер телефона имеет некорректный формат");
     }
@@ -237,6 +278,7 @@ export class AuthController {
     const alreadyRegistered = await this.userRepository.findOne({
       phoneNumber,
     });
+
     if (alreadyRegistered) {
       throw new UserAlreadyExistsError(
         "Пользователь с указанным номером уже зарегистрирована",
@@ -246,6 +288,7 @@ export class AuthController {
     let searchResult = await this.phoneVerificationRepository.findOne({
       phoneNumber,
     });
+
     if (!searchResult) {
       searchResult = new PhoneVerification();
       searchResult.phoneNumber = phoneNumber;
@@ -255,12 +298,15 @@ export class AuthController {
         searchResult,
       );
     }
+
     const { attempts: triesCount, updatedAt } = searchResult;
     const diffDays = moment().diff(moment(updatedAt), "d");
     const diffSeconds = moment().diff(moment(updatedAt), "s");
+
     if (triesCount >= 1 && diffSeconds < 60) {
       throw new BadRequestError("Превышено количество СМС в минуту");
     }
+
     if (triesCount >= 3) {
       if (diffDays < 1) {
         throw new BadRequestError("Превышено количество СМС в сутки");
@@ -268,21 +314,41 @@ export class AuthController {
         searchResult.attempts = 0;
       }
     }
+
     searchResult.attempts += 1;
     searchResult.verificationCode = generatedCode;
-    await this.phoneVerificationRepository.save(searchResult);
+
     try {
-      await this.smsService.sendSMS(
-        phoneNumber,
-        `Ваш проверочный код для togudev.ru: ${generatedCode}`,
-      );
+      await this.phoneVerificationRepository.save(searchResult);
     } catch (err) {
+      logger.error(err);
+      Raven.captureException(err);
+      throw new InternalServerError(
+        "Ошибка создания заявки на подтверждение номера",
+      );
+    }
+
+    try {
+      const smsTask = await this.smsService.sendSMS(
+        phoneNumber,
+        `Ваш проверочный код: ${generatedCode}`,
+      );
+
+      if (smsTask === 100) {
+        return {
+          status: 200,
+          message: `Проверочный код отправлен на номер ${phoneNumber}`,
+        };
+      } else {
+        throw new Error(
+          `Не удалось отправить СМС сообщение. status_code: ${smsTask}`,
+        );
+      }
+    } catch (err) {
+      logger.error(err);
+      Raven.captureException(err);
       throw new InternalServerError("Ошибка отправки SMS сообщения");
     }
-    return {
-      status: 200,
-      message: `Проверочный код отправлен на номер ${phoneNumber}`,
-    };
   }
 
   @Post("/verification/code")
@@ -293,33 +359,40 @@ export class AuthController {
     const searchResult = await this.phoneVerificationRepository.findOne({
       phoneNumber,
     });
+
     const isCodeCorrect = verificationCode && !Number.isNaN(verificationCode);
     if (!isCodeCorrect) {
       throw new BadRequestError(
         "Не указан проверочный код или код имеет неверный формат",
       );
     }
+
     if (!searchResult) {
       throw new BadRequestError("Заявка на подтверждение не найдена");
     }
+
     const isCodeWrong =
       searchResult.verificationCode !== Number(verificationCode);
+
     if (isCodeWrong) {
       throw new BadRequestError("Указан неверный проверочный код");
     }
+
     try {
       await this.phoneVerificationRepository.remove(searchResult);
+      const phoneToken = await this.jwtService.sign(
+        { phoneToken: true, phoneNumber },
+        { algorithm: "HS512", expiresIn: "1d" },
+      );
+      return {
+        status: 200,
+        message: "Номер успешно подтвержден",
+        phoneToken,
+      };
     } catch (err) {
-      throw new InternalServerError(err);
+      logger.error(err);
+      Raven.captureException(err);
+      throw new InternalServerError("Ошибка подтверждения номера");
     }
-    const phoneToken = await this.jwtService.sign(
-      { phoneToken: true, phoneNumber },
-      { algorithm: "HS512", expiresIn: "1d" },
-    );
-    return {
-      status: 200,
-      message: "Номер успешно подтвержден",
-      phoneToken,
-    };
   }
 }

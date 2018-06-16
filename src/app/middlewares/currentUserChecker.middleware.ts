@@ -13,5 +13,6 @@ export async function currentUserChecker(
 ): Promise<User | undefined> {
   const token = jwtService.extractToken(ctx.request.headers);
   const payload: any = await jwtService.verify(token);
+
   return getCustomRepository(UserRepository).getUserByUuid(payload.sub);
 }
