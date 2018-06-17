@@ -5,7 +5,7 @@
     "strictNullChecks": true,
     "lib": ["esnext", "dom"],
     "types": ["node", "mocha", "chai"],
-    "target": "esnext",
+    "target": "es6",
     "module": "commonjs",
     "moduleResolution": "node",
     "baseUrl": ".",
@@ -31,5 +31,5 @@
     ]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules/*", "**/*.spec.ts"]
+  "exclude": ["node_modules/*", "**/*.test.ts"]
 }

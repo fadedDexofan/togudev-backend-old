@@ -25,7 +25,7 @@ commander
   });
 
 commander.command("migrations:up").action(() => {
-  exec(`typeorm migrations:run`, (code: any, stdout: any, stderr: any) => {
+  exec(`typeorm migration:run`, (code: any, stdout: any, stderr: any) => {
     if (stderr) {
       console.log("migration error:", stderr);
       return;
@@ -35,7 +35,7 @@ commander.command("migrations:up").action(() => {
 });
 
 commander.command("migrations:down").action(() => {
-  exec(`typeorm migrations:revert`, (code: any, stdout: any, stderr: any) => {
+  exec(`typeorm migration:revert`, (code: any, stdout: any, stderr: any) => {
     if (stderr) {
       console.log("migration error:", stderr);
       return;
@@ -46,7 +46,7 @@ commander.command("migrations:down").action(() => {
 
 commander.command("migrations:create <name>").action((name: string) => {
   exec(
-    `typeorm migrations:create -n ${name}`,
+    `typeorm migration:create -n ${name}`,
     (code: any, stdout: any, stderr: any) => {
       if (stderr) {
         console.log("migration error:", stderr);
@@ -59,7 +59,7 @@ commander.command("migrations:create <name>").action((name: string) => {
 
 commander.command("migrations:generate <name>").action((name: string) => {
   exec(
-    `typeorm migrations:generate -n ${name}`,
+    `typeorm migration:generate -n ${name}`,
     (code: any, stdout: any, stderr: any) => {
       if (stderr) {
         console.log("migration error:", stderr);
@@ -73,6 +73,26 @@ commander.command("migrations:generate <name>").action((name: string) => {
 commander.command("test:ormConfig").action(() => {
   try {
     const ormConfig = require("../config/ormconfig.test.json");
+    const fileData = `#!/usr/bin/env bash
+        psql -U postgres -c "CREATE DATABASE ${ormConfig.database};"
+        psql -U postgres -c "CREATE USER ${ormConfig.username} WITH PASSWORD '${
+      ormConfig.password
+    }'"
+        psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE ${
+          ormConfig.database
+        } TO ${ormConfig.username};"`;
+    writeFileSync(
+      join(process.cwd(), "scripts", "database.setup.sh"),
+      fileData,
+    );
+  } catch (error) {
+    throw new Error("Failed to create a database.config for test");
+  }
+});
+
+commander.command("production:ormConfig").action(() => {
+  try {
+    const ormConfig = require("../config/ormconfig.production.json");
     const fileData = `#!/usr/bin/env bash
         psql -U postgres -c "CREATE DATABASE ${ormConfig.database};"
         psql -U postgres -c "CREATE USER ${ormConfig.username} WITH PASSWORD '${

@@ -3,8 +3,8 @@
   "host": "localhost",
   "port": 5432,
   "username": "postgres",
-  "password": "",
-  "database": "production_db",
+  "password": "C035rln*6R63eHlG!UYpl",
+  "database": "togudev-backend",
   "synchronize": false,
   "logging": false,
   "cache": true
