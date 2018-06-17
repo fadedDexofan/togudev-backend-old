@@ -2,9 +2,9 @@
   "type": "postgres",
   "host": "localhost",
   "port": 5432,
-  "username": "togudev-user",
+  "username": "togudev",
   "password": "C035rln*6R63eHlG!UYpl",
-  "database": "togudev-backend",
+  "database": "togudev_backend",
   "synchronize": true,
   "logging": false,
   "cache": true
