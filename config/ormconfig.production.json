@@ -1,11 +1,11 @@
 {
   "type": "postgres",
-  "host": "localhost",
+  "host": "10.131.50.209",
   "port": 5432,
-  "username": "postgres",
+  "username": "togudev-user",
   "password": "C035rln*6R63eHlG!UYpl",
   "database": "togudev-backend",
-  "synchronize": false,
+  "synchronize": true,
   "logging": false,
   "cache": true
 }
