@@ -1,6 +1,6 @@
 {
   "type": "postgres",
-  "host": "10.131.50.209",
+  "host": "localhost",
   "port": 5432,
   "username": "togudev-user",
   "password": "C035rln*6R63eHlG!UYpl",
