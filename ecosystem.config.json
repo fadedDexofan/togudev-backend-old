@@ -1,7 +1,7 @@
 {
   "apps": [
     {
-      "name": "koa-typeorm-starter",
+      "name": "togudev_backend",
       "script": "./dist/server.js",
       "watch": ["./dist"],
       "instances": "max",

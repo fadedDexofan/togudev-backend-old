@@ -10,7 +10,7 @@
     "url": "git+https://bitbucket.org/mourka-studios/togudev-backend"
   },
   "scripts": {
-    "pm2": "pm2 startOrRestart ecosystem.config.json",
+    "pm2": "pm2 startOrRestart ecosystem.config.json --env production",
     "docker": "pm2-runtime ecosystem.config.json",
     "start": "npm run build && npm run serve",
     "build": "npm run build-ts && npm run tslint",
