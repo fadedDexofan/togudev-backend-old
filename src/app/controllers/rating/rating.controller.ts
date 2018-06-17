@@ -43,8 +43,10 @@ export class RatingController {
   public async addRating(
     @CurrentUser() user: User,
     @Param("uuid") uuid: string,
-    @BodyParam("valueChange") valueChange: number,
-    @BodyParam("reason") reason: string,
+    @BodyParam("valueChange", { required: true })
+    valueChange: number,
+    @BodyParam("reason", { required: true })
+    reason: string,
   ) {
     const rating = await this.ratingRepository.findOne(uuid, {
       relations: ["transaction"],

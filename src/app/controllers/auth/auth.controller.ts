@@ -1,14 +1,12 @@
 import * as jwt from "jsonwebtoken";
-import { Context } from "koa";
 import moment from "moment";
 import {
   Authorized,
   BadRequestError,
-  Body,
   BodyParam,
-  Ctx,
   CurrentUser,
   Get,
+  HeaderParams,
   HttpCode,
   HttpError,
   InternalServerError,
@@ -62,22 +60,30 @@ export class AuthController {
   @HttpCode(201)
   @Post("/register")
   public async register(
-    @Ctx() ctx: Context,
-    @BodyParam("password") password: string,
+    @HeaderParams() headers: any,
+    @BodyParam("password", { required: true })
+    password: string,
   ) {
-    const phoneToken = this.jwtService.extractToken(ctx.headers);
+    if (password.length < 6 || password.length > 24) {
+      throw new BadRequestError("Пароль должен быть от 6 до 24 символов");
+    }
+
+    const phoneToken = this.jwtService.extractToken(headers);
     if (!phoneToken) {
       throw new BadRequestError(
         "Не передан токен регистрации или он имеет неверный формат. Используйте Authorization: Bearer <token>",
       );
     }
+
     interface IPhoneToken {
       phoneToken: boolean;
       phoneNumber: string;
     }
+
     const { phoneNumber } = (await this.jwtService.verify(
       phoneToken,
     )) as IPhoneToken;
+
     const dupUser = await this.userRepository.getUserByPhone(phoneNumber);
     if (dupUser) {
       throw new UserAlreadyExistsError();
@@ -124,12 +130,11 @@ export class AuthController {
 
   @Post("/login")
   public async login(
-    @Ctx() ctx: Context,
-    @Body({ validate: false })
-    loginData: User,
+    @BodyParam("phoneNumber", { required: true })
+    phoneNumber: string,
+    @BodyParam("password", { required: true })
+    password: string,
   ) {
-    const { phoneNumber, password } = loginData;
-
     const user = await this.userRepository
       .createQueryBuilder("user")
       .leftJoinAndSelect("user.refreshTokens", "refreshToken")
@@ -178,8 +183,8 @@ export class AuthController {
 
   @Post("/refresh-tokens")
   public async refreshTokens(
-    @Ctx() ctx: Context,
-    @BodyParam("refreshToken") refreshToken: string,
+    @BodyParam("refreshToken", { required: true })
+    refreshToken: string,
   ) {
     const tokenData: any = jwt.decode(refreshToken);
     if (!tokenData) {
@@ -267,7 +272,8 @@ export class AuthController {
 
   @Post("/verification")
   public async phoneVerification(
-    @BodyParam("phoneNumber") phoneNumber: string,
+    @BodyParam("phoneNumber", { required: true })
+    phoneNumber: string,
   ) {
     const generatedCode = getRandomInt(1000, 10000);
 
@@ -353,8 +359,10 @@ export class AuthController {
 
   @Post("/verification/code")
   public async codeVerification(
-    @BodyParam("phoneNumber") phoneNumber: string,
-    @BodyParam("verificationCode") verificationCode: number,
+    @BodyParam("phoneNumber", { required: true })
+    phoneNumber: string,
+    @BodyParam("verificationCode", { required: true })
+    verificationCode: number,
   ) {
     const searchResult = await this.phoneVerificationRepository.findOne({
       phoneNumber,

@@ -12,6 +12,7 @@ import {
   OnUndefined,
   Param,
   Post,
+  QueryParam,
 } from "routing-controllers";
 import { Service } from "typedi";
 import { InjectRepository } from "typeorm-typedi-extensions";
@@ -48,7 +49,8 @@ export class DirectionController {
   @Post("/apply")
   public async applyToDirection(
     @CurrentUser() user: User,
-    @BodyParam("directionId") directionId: number,
+    @BodyParam("directionId", { required: true })
+    directionId: number,
   ) {
     const direction = await this.directionRepository.findOne(directionId);
 
@@ -85,8 +87,8 @@ export class DirectionController {
   @Get("/:id/ratings")
   public async getAllDirectionRatings(
     @Param("id") id: number,
-    @Param("limit") limit?: number,
-    @Param("offset") offset?: number,
+    @QueryParam("limit") limit?: number,
+    @QueryParam("offset") offset?: number,
   ) {
     if (limit) {
       limit = limit <= 0 ? 1 : limit;
@@ -112,7 +114,10 @@ export class DirectionController {
   @HttpCode(201)
   @Authorized(["admin"])
   @Post()
-  public async createDirection(@Body() directionData: Direction) {
+  public async createDirection(
+    @Body({ required: true })
+    directionData: Direction,
+  ) {
     const { name, mentors, description } = directionData;
 
     const dupDirection = await this.directionRepository.findOne(

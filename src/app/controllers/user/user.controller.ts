@@ -1,19 +1,21 @@
-import { Context } from "koa";
 import {
   Authorized,
-  Ctx,
+  Body,
   CurrentUser,
   Get,
+  InternalServerError,
   JsonController,
   NotFoundError,
   OnUndefined,
   Param,
+  Patch,
 } from "routing-controllers";
 import { Service } from "typedi";
 import { InjectRepository } from "typeorm-typedi-extensions";
 
-import { User } from "../../../db/entities";
+import { Profile, User } from "../../../db/entities";
 import { RatingRepository, UserRepository } from "../../../db/repositories";
+import { logger, Raven } from "../../../utils";
 import { UserNotFoundError } from "../../errors";
 
 @Service()
@@ -25,13 +27,30 @@ export class UserController {
   ) {}
   @Authorized(["user"])
   @Get("/profile")
-  public async profile(@Ctx() ctx: Context, @CurrentUser() user: User) {
+  public async profile(@CurrentUser() user: User) {
     if (!user) {
       return new NotFoundError("Текущий пользователь не найден");
     }
 
     return user;
   }
+
+  @Authorized(["user"])
+  @Patch("/profile")
+  public async updateProfile(
+    @CurrentUser() user: User,
+    @Body() profile: Profile,
+  ) {
+    user.profile = profile;
+    try {
+      await this.userRepository.save(user);
+    } catch (err) {
+      logger.error(err);
+      Raven.captureException(err);
+      throw new InternalServerError("Не удалось отредактировать профиль");
+    }
+  }
+
   @Authorized(["user"])
   @Get("/profile/:uuid")
   @OnUndefined(UserNotFoundError)
@@ -42,7 +61,7 @@ export class UserController {
   @Authorized(["user"])
   @Get("/profile/:uuid/ratings")
   public async getUserRatings(@Param("uuid") uuid: string) {
-    const user = await this.userRepository.findOne(uuid);
+    const user = await this.userRepository.getUserByUuid(uuid);
     if (!user) {
       throw new UserNotFoundError();
     }
