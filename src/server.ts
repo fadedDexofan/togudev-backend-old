@@ -5,7 +5,7 @@ import { Container } from "typedi";
 import { App } from "./app/app";
 import { Database } from "./db/database";
 
-import { logger } from "./utils";
+import { logger, Raven } from "./utils";
 
 const PORT = process.env.PORT || 3000;
 
@@ -27,7 +27,9 @@ process.on("SIGINT", () => {
     .then(() => {
       process.exit(0);
     })
-    .catch((_err) => {
+    .catch((err) => {
+      logger.error(err);
+      Raven.captureException(err);
       process.exit(1);
     });
 });

@@ -1,7 +1,8 @@
 import axios, { AxiosRequestConfig } from "axios";
-import config from "config";
 import qs from "querystring";
 import { Service } from "typedi";
+
+import config from "../../config/config.json";
 
 @Service()
 export class SMSService {
@@ -10,7 +11,7 @@ export class SMSService {
       method: "get",
       url: "https://sms.ru/sms/send",
       params: {
-        api_id: config.get("sms.api_id"),
+        api_id: config.sms.api_id,
         to: phoneNumber,
         msg: message,
         json: 1,
@@ -23,8 +24,8 @@ export class SMSService {
       // Код ответа
       // http://sms.ru/api/status
       return resp.data.status_code;
-    } catch (error) {
-      throw new Error(error);
+    } catch (err) {
+      throw new Error(err);
     }
   }
 }

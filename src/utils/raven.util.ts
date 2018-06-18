@@ -1,7 +1,8 @@
-import config from "config";
 import Raven from "raven";
 
-const ravenDSN = config.get("raven.dsn");
+import config from "../../config/config.json";
+
+const ravenDSN = config.raven.dsn;
 
 Raven.config(ravenDSN).install();
 

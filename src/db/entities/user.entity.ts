@@ -60,11 +60,7 @@ export class User {
 
   public async checkPassword(plainPassword: string): Promise<boolean> {
     const bcryptService = Container.get(BcryptService);
-    const passwordIsCorrect = bcryptService.compareHash(
-      plainPassword,
-      this.password,
-    );
-    return passwordIsCorrect;
+    return bcryptService.compareHash(plainPassword, this.password);
   }
 
   @BeforeInsert()

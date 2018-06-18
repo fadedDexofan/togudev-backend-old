@@ -1,6 +1,0 @@
-{
-  "auth": {
-    "jwtSecret": "secret",
-    "saltRounds": 10
-  }
-}

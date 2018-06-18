@@ -1,6 +1,6 @@
 {
   "auth": {
-    "jwtSecret": "secret",
+    "jwtSecret": "Rf%55ywIdiPbmQ!JH97h4",
     "saltRounds": 10
   },
   "sms": {

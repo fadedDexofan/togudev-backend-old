@@ -1,10 +1,9 @@
 import { compare, hash } from "bcryptjs";
-import config from "config";
 import { Service } from "typedi";
 
-const SALT_ROUNDS: number = config.has("auth.saltRounds")
-  ? config.get("auth.saltRounds")
-  : 10;
+import config from "../../config/config.json";
+
+const SALT_ROUNDS: number = config.auth.saltRounds || 10;
 
 @Service()
 export class BcryptService {

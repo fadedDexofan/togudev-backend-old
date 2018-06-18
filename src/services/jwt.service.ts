@@ -1,17 +1,17 @@
-import config from "config";
 import { decode, sign, verify } from "jsonwebtoken";
 import { Service } from "typedi";
 import { User } from "../db/entities";
 
-const JWT_SECRET: string = config.has("auth.jwtSecret")
-  ? config.get("auth.jwtSecret")
-  : "changeinconfig";
+import config from "../../config/config.json";
+
+const JWT_SECRET: string = config.auth.jwtSecret || "secret";
 
 @Service()
 export class JWTService {
   public async sign(payload: any, options: any) {
     return sign(payload, JWT_SECRET, options);
   }
+
   public async verify(token: string) {
     return verify(token, JWT_SECRET);
   }
@@ -54,10 +54,7 @@ export class JWTService {
         expiresIn: "60d",
       },
     };
-    const refreshToken = await this.sign(
-      configRefresh.payload,
-      configRefresh.options,
-    );
-    return refreshToken;
+
+    return this.sign(configRefresh.payload, configRefresh.options);
   }
 }

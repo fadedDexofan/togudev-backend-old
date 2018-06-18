@@ -29,8 +29,7 @@ import {
   RoleRepository,
   UserRepository,
 } from "../../../db/repositories";
-import { JWTService } from "../../../services";
-import { SMSService } from "../../../services/sms.service";
+import { JWTService, SMSService } from "../../../services";
 import { logger, Raven } from "../../../utils";
 import {
   BadRefreshTokenError,
@@ -201,7 +200,7 @@ export class AuthController {
       throw new NotFoundError("Токен не найден");
     }
     try {
-      const _valid = await this.jwtService.verify(refreshToken);
+      await this.jwtService.verify(refreshToken);
     } catch (err) {
       try {
         await this.refreshRepository.remove(tokenInDB);
@@ -346,9 +345,9 @@ export class AuthController {
           message: `Проверочный код отправлен на номер ${phoneNumber}`,
         };
       } else {
-        throw new Error(
-          `Не удалось отправить СМС сообщение. status_code: ${smsTask}`,
-        );
+        return {
+          message: `Не удалось отправить СМС сообщение. status_code: ${smsTask}`,
+        };
       }
     } catch (err) {
       logger.error(err);

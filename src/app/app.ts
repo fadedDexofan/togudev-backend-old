@@ -11,7 +11,7 @@ const DEVELOPMENT = process.env.NODE_ENV === "development";
 
 @Service()
 export class App {
-  private application: Koa;
+  private readonly application: Koa;
 
   public constructor() {
     routingUseContainer(Container);

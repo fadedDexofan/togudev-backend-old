@@ -8,10 +8,11 @@ import {
 } from "routing-controllers";
 import { Service } from "typedi";
 import { InjectRepository } from "typeorm-typedi-extensions";
-
 // import { DirectionRepository } from "../../../db/repositories";
-import { UserRepository } from "../../../db/repositories";
-import { ApplicationRepository } from "../../../db/repositories/application.repository";
+import {
+  ApplicationRepository,
+  UserRepository,
+} from "../../../db/repositories";
 
 import { Rating } from "../../../db/entities";
 import { logger, Raven } from "../../../utils";
@@ -27,9 +28,7 @@ export class ApplicationController {
   @Get()
   @Authorized(["mentor"])
   public async getApplications() {
-    const applications = await this.applicationRepository.find();
-
-    return applications;
+    return this.applicationRepository.find();
   }
 
   @Authorized(["mentor"])

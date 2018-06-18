@@ -89,11 +89,9 @@ export class DirectionController {
   @Get("/:id")
   @OnUndefined(NotFoundError)
   public async getDirection(@Param("id") id: number) {
-    const direction = await this.directionRepository.findOne(id, {
+    return this.directionRepository.findOne(id, {
       relations: ["participants", "mentors"],
     });
-
-    return direction;
   }
 
   @Authorized(["user"])
@@ -153,11 +151,8 @@ export class DirectionController {
     newDirection.participants = [];
 
     try {
-      const createdDirection: Direction = await this.directionRepository.save(
-        newDirection,
-      );
-
-      return createdDirection;
+      await this.directionRepository.save(newDirection);
+      return { message: "Направление успешно создано" };
     } catch (err) {
       logger.error(err);
       Raven.captureException(err);
