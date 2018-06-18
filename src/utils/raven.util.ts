@@ -1,8 +1,6 @@
 import Raven from "raven";
 
-import config from "../../config/config.json";
-
-const ravenDSN = config.raven.dsn;
+const ravenDSN = process.env.RAVEN_DSN;
 
 Raven.config(ravenDSN).install();
 

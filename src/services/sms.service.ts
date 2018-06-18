@@ -2,7 +2,7 @@ import axios, { AxiosRequestConfig } from "axios";
 import qs from "querystring";
 import { Service } from "typedi";
 
-import config from "../../config/config.json";
+const apiId = process.env.SMS_API_ID;
 
 @Service()
 export class SMSService {
@@ -11,7 +11,7 @@ export class SMSService {
       method: "get",
       url: "https://sms.ru/sms/send",
       params: {
-        api_id: config.sms.api_id,
+        api_id: apiId,
         to: phoneNumber,
         msg: message,
         json: 1,

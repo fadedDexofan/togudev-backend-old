@@ -1,9 +1,7 @@
 import { compare, hash } from "bcryptjs";
 import { Service } from "typedi";
 
-import config from "../../config/config.json";
-
-const SALT_ROUNDS: number = config.auth.saltRounds || 10;
+const SALT_ROUNDS: number = Number(process.env.SALT_ROUNDS) || 10;
 
 @Service()
 export class BcryptService {

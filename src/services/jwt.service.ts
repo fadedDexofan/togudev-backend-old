@@ -2,9 +2,7 @@ import { decode, sign, verify } from "jsonwebtoken";
 import { Service } from "typedi";
 import { User } from "../db/entities";
 
-import config from "../../config/config.json";
-
-const JWT_SECRET: string = config.auth.jwtSecret || "secret";
+const JWT_SECRET: string = process.env.JWT_SECRET || "secret";
 
 @Service()
 export class JWTService {

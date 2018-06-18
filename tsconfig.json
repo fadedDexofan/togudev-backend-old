@@ -8,7 +8,6 @@
     "target": "es6",
     "module": "commonjs",
     "moduleResolution": "node",
-    "resolveJsonModule": true,
     "baseUrl": ".",
     "paths": {
       "*": ["node_modules/*", "src/types/*"]
