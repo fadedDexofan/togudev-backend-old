@@ -42,7 +42,9 @@ export class User {
 
   @OneToMany((type) => RatingTransaction, (transaction) => transaction.author)
   public mentorTransactions: RatingTransaction[];
-  @OneToMany((type) => Rating, (rating) => rating.ratingOwner)
+  @OneToMany((type) => Rating, (rating) => rating.ratingOwner, {
+    cascade: true,
+  })
   public userRatings: Rating[];
   @ManyToMany((type) => Direction, (direction) => direction.mentors)
   public mentions: Direction[];

@@ -14,5 +14,14 @@ export async function currentUserChecker(
   const token = jwtService.extractToken(ctx.request.headers);
   const payload: any = await jwtService.verify(token);
 
-  return getCustomRepository(UserRepository).getUserByUuid(payload.sub);
+  return getCustomRepository(UserRepository).findOne(payload.sub, {
+    relations: [
+      "profile",
+      "userRatings",
+      "userRatings.direction",
+      "mentions",
+      "roles",
+      "directions",
+    ],
+  });
 }

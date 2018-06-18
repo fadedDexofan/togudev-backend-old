@@ -1,5 +1,6 @@
 import {
   Authorized,
+  BadRequestError,
   Body,
   CurrentUser,
   Get,
@@ -12,9 +13,10 @@ import {
 } from "routing-controllers";
 import { Service } from "typedi";
 import { InjectRepository } from "typeorm-typedi-extensions";
+import { isEmail } from "validator";
 
 import { Profile, User } from "../../../db/entities";
-import { RatingRepository, UserRepository } from "../../../db/repositories";
+import { RoleRepository, UserRepository } from "../../../db/repositories";
 import { logger, Raven } from "../../../utils";
 import { UserNotFoundError } from "../../errors";
 
@@ -23,7 +25,7 @@ import { UserNotFoundError } from "../../errors";
 export class UserController {
   constructor(
     @InjectRepository() private userRepository: UserRepository,
-    @InjectRepository() private ratingRepository: RatingRepository,
+    @InjectRepository() private roleRepository: RoleRepository,
   ) {}
   @Authorized(["user"])
   @Get("/profile")
@@ -41,9 +43,17 @@ export class UserController {
     @CurrentUser() user: User,
     @Body() profile: Profile,
   ) {
-    user.profile = profile;
+    if (profile.email) {
+      if (!isEmail(profile.email)) {
+        throw new BadRequestError("Email имеет некорректный формат");
+      }
+    }
+
+    Object.assign(user.profile, profile);
+
     try {
       await this.userRepository.save(user);
+      return { message: "Профиль успешно отредактирован" };
     } catch (err) {
       logger.error(err);
       Raven.captureException(err);
@@ -54,22 +64,47 @@ export class UserController {
   @Authorized(["user"])
   @Get("/profile/:uuid")
   @OnUndefined(UserNotFoundError)
-  public async getUser(@Param("uuid") uuid: string) {
-    return this.userRepository.getUserByUuid(uuid);
-  }
-
-  @Authorized(["user"])
-  @Get("/profile/:uuid/ratings")
-  public async getUserRatings(@Param("uuid") uuid: string) {
-    const user = await this.userRepository.getUserByUuid(uuid);
-    if (!user) {
-      throw new UserNotFoundError();
+  public async getUser(@CurrentUser() user: User, @Param("uuid") uuid: string) {
+    const mentorRole = await this.roleRepository.getRoleByName("mentor");
+    if (!mentorRole) {
+      throw new InternalServerError("Ошибка проверки доступа");
     }
-    const userRatings = await this.ratingRepository.find({
-      where: { ratingOwner: user },
-      relations: ["transaction"],
-    });
 
-    return userRatings;
+    const isMentor = user.roles.includes(mentorRole);
+    const publicRelations = [
+      "directions",
+      "mentions",
+      "userRatings",
+      "profile",
+      "roles",
+    ];
+
+    let userProfile: User | undefined;
+
+    if (isMentor) {
+      userProfile = await this.userRepository.findOne(uuid, {
+        relations: [...publicRelations, "mentorTransactions"],
+      });
+
+      if (!userProfile) {
+        throw new UserNotFoundError();
+      }
+
+      return userProfile;
+    } else {
+      userProfile = await this.userRepository.findOne(uuid, {
+        relations: publicRelations,
+      });
+
+      if (!userProfile) {
+        throw new UserNotFoundError();
+      }
+
+      delete userProfile.phoneNumber;
+      delete userProfile.profile.email;
+      delete userProfile.profile.contact;
+
+      return userProfile;
+    }
   }
 }

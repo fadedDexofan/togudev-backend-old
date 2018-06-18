@@ -1,4 +1,3 @@
-import { IsEmail } from "class-validator";
 import { Column, Entity, PrimaryGeneratedColumn } from "typeorm";
 
 @Entity()
@@ -9,7 +8,6 @@ export class Profile {
   @Column({ nullable: true })
   public lastName?: string;
   @Column({ nullable: true })
-  @IsEmail()
   public email?: string;
   @Column({ nullable: true })
   public contact?: string;

@@ -4,7 +4,7 @@
   "port": 5432,
   "username": "postgres",
   "password": "",
-  "database": "togudev-backend",
+  "database": "togudev_backend",
   "synchronize": true,
   "logging": true,
   "cache": true

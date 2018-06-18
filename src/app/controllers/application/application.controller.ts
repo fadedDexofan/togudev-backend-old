@@ -36,7 +36,7 @@ export class ApplicationController {
   @Get("/:uuid/approve")
   public async approveApplication(@Param("uuid") uuid: string) {
     const application = await this.applicationRepository.findOne(uuid, {
-      relations: ["user", "direction", "user.userRatings"],
+      relations: ["user", "user.directions", "user.userRatings", "direction"],
     });
 
     if (!application) {
@@ -51,6 +51,7 @@ export class ApplicationController {
     rating.ratingOwner = user;
     rating.direction = direction;
     rating.value = 0;
+    rating.ratingTransactions = [];
     user.userRatings.push(rating);
 
     try {

@@ -12,7 +12,6 @@ export class SMSService {
       params: {
         api_id: config.get("sms.api_id"),
         to: phoneNumber,
-        // from: config.get("sms.from"),
         msg: message,
         json: 1,
       },

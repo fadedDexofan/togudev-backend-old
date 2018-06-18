@@ -1,7 +1,6 @@
 import {
   Authorized,
   BadRequestError,
-  Body,
   BodyParam,
   CurrentUser,
   Get,
@@ -39,9 +38,22 @@ export class DirectionController {
 
   @Get()
   public async getDirections() {
-    const directions = await this.directionRepository.find();
+    const directions = await this.directionRepository.find({
+      relations: ["participants"],
+    });
+    const response: any = [];
+    if (directions) {
+      directions.forEach((direction) => {
+        response.push({
+          id: direction.id,
+          name: direction.name,
+          description: direction.description,
+          participantsCount: direction.participants.length,
+        });
+      });
+    }
 
-    return directions;
+    return response;
   }
 
   @HttpCode(201)
@@ -65,7 +77,7 @@ export class DirectionController {
     try {
       await this.applicationRepository.save(application);
 
-      return { message: "Заявка успешно создана", application };
+      return { status: 201, message: "Заявка успешно создана" };
     } catch (err) {
       logger.error(err);
       Raven.captureException(err);
@@ -73,6 +85,7 @@ export class DirectionController {
     }
   }
 
+  @Authorized(["user"])
   @Get("/:id")
   @OnUndefined(NotFoundError)
   public async getDirection(@Param("id") id: number) {
@@ -104,7 +117,7 @@ export class DirectionController {
     }
 
     return this.ratingRepository.find({
-      relations: ["user", "direction"],
+      relations: ["ratingOwner"],
       where: { direction },
       take: limit,
       skip: offset,
@@ -115,11 +128,13 @@ export class DirectionController {
   @Authorized(["admin"])
   @Post()
   public async createDirection(
-    @Body({ required: true })
-    directionData: Direction,
+    @BodyParam("name", { required: true })
+    name: string,
+    @BodyParam("description", { required: true })
+    description: string,
+    @BodyParam("mentors", { required: true })
+    mentors: string[],
   ) {
-    const { name, mentors, description } = directionData;
-
     const dupDirection = await this.directionRepository.findOne(
       { name },
       { relations: ["mentors"] },
@@ -135,6 +150,7 @@ export class DirectionController {
     newDirection.name = name;
     newDirection.description = description;
     newDirection.mentors = mentorsData;
+    newDirection.participants = [];
 
     try {
       const createdDirection: Direction = await this.directionRepository.save(

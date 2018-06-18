@@ -1,8 +1,8 @@
 import { BadRequestError } from "routing-controllers";
 
 export class BadRefreshTokenError extends BadRequestError {
-  constructor() {
-    super("Bad Refresh Token format");
+  constructor(message: string = "Bad Refresh Token format") {
+    super(message);
     this.name = "BadRefreshTokenError";
   }
 }

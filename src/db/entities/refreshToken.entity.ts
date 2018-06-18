@@ -1,4 +1,10 @@
-import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from "typeorm";
 
 import { User } from "./user.entity";
 
@@ -9,4 +15,6 @@ export class RefreshToken {
   public refreshToken: string;
   @ManyToOne((type) => User, (user) => user.refreshTokens, { eager: true })
   public user: User;
+
+  @CreateDateColumn() public createdAt?: Date;
 }

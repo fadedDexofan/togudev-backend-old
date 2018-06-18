@@ -1,7 +1,6 @@
 import {
   Authorized,
   BodyParam,
-  CurrentUser,
   Get,
   InternalServerError,
   JsonController,
@@ -13,7 +12,7 @@ import {
 import { Service } from "typedi";
 import { InjectRepository } from "typeorm-typedi-extensions";
 
-import { RatingTransaction, User } from "../../../db/entities";
+import { RatingTransaction } from "../../../db/entities";
 import {
   RatingRepository,
   RatingTransactionRepository,
@@ -34,14 +33,13 @@ export class RatingController {
   @OnUndefined(NotFoundError)
   public async getRatingInfo(@Param("uuid") uuid: string) {
     return this.ratingRepository.findOne(uuid, {
-      relations: ["user", "direction", "transaction"],
+      relations: ["ratingOwner", "direction", "ratingTransactions"],
     });
   }
 
   @Authorized(["mentor"])
   @Post("/:uuid/add")
   public async addRating(
-    @CurrentUser() user: User,
     @Param("uuid") uuid: string,
     @BodyParam("valueChange", { required: true })
     valueChange: number,
@@ -49,7 +47,7 @@ export class RatingController {
     reason: string,
   ) {
     const rating = await this.ratingRepository.findOne(uuid, {
-      relations: ["transaction"],
+      relations: ["ratingTransactions", "ratingOwner"],
     });
 
     if (!rating) {
@@ -57,13 +55,18 @@ export class RatingController {
     }
 
     const transaction = new RatingTransaction();
-    transaction.author = user;
+    transaction.author = rating.ratingOwner;
     transaction.rating = rating;
     transaction.reason = reason;
     transaction.valueChange = valueChange;
 
+    rating.value += valueChange;
+
     try {
+      await this.ratingRepository.save(rating);
       await this.transactionRepository.save(transaction);
+
+      return { message: "Рейтинг успешно изменен" };
     } catch (err) {
       logger.error(err);
       Raven.captureException(err);

@@ -8,7 +8,6 @@ import {
   Get,
   HeaderParams,
   HttpCode,
-  HttpError,
   InternalServerError,
   JsonController,
   NotFoundError,
@@ -112,9 +111,9 @@ export class AuthController {
     newUser.profile = new Profile();
 
     try {
-      const createdUser: User = await this.userRepository.save(newUser);
-      delete createdUser.password;
-      return createdUser;
+      await this.userRepository.save(newUser);
+
+      return { status: 201, message: "Пользователь успешно зарегистрирован" };
     } catch (err) {
       if (err.name === "QueryFailedError") {
         throw new UserAlreadyExistsError(
@@ -211,7 +210,7 @@ export class AuthController {
         Raven.captureException(err);
         throw new InternalServerError("Ошибка удаления токена");
       }
-      throw new HttpError(403, "Некорректный Refresh токен");
+      throw new BadRefreshTokenError("Некорректный Refresh токен");
     }
 
     if (expired) {
@@ -236,6 +235,7 @@ export class AuthController {
     rToken.user = tokenInDB.user;
 
     try {
+      await this.refreshRepository.remove(tokenInDB);
       await this.refreshRepository.save(rToken);
 
       return {

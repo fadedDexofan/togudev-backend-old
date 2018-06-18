@@ -15,7 +15,7 @@ export class Rating {
   @PrimaryGeneratedColumn("uuid") public uuid?: string;
   @OneToMany((type) => RatingTransaction, (transaction) => transaction.rating)
   public ratingTransactions?: RatingTransaction[];
-  @ManyToOne((type) => User, (user) => user.userRatings, { cascade: true })
+  @ManyToOne((type) => User, (user) => user.userRatings)
   public ratingOwner: User;
 
   @Column({ default: 0 })

@@ -18,5 +18,5 @@ export class Direction {
   @Column("text") public description: string;
   @ManyToMany((type) => User, (user) => user.directions)
   @JoinTable({ name: "direction_users" })
-  public participants?: User[];
+  public participants: User[];
 }

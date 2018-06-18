@@ -18,8 +18,9 @@ export async function authorizationChecker(
     return false;
   }
 
-  const userFromToken = await getCustomRepository(UserRepository).getUserByUuid(
+  const userFromToken = await getCustomRepository(UserRepository).findOne(
     payload.sub,
+    { relations: ["roles"] },
   );
 
   if (!userFromToken) {
