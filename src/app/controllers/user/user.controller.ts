@@ -27,6 +27,7 @@ export class UserController {
     @InjectRepository() private userRepository: UserRepository,
     @InjectRepository() private roleRepository: RoleRepository,
   ) {}
+
   @Authorized(["user"])
   @Get("/profile")
   public async profile(@CurrentUser() user: User) {

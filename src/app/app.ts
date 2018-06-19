@@ -5,6 +5,7 @@ import {
   useContainer as routingUseContainer,
 } from "routing-controllers";
 import { Container, Service } from "typedi";
+
 import { authorizationChecker, currentUserChecker } from "./middlewares";
 
 const DEVELOPMENT = process.env.NODE_ENV === "development";

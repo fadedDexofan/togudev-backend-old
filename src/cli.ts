@@ -24,7 +24,7 @@ commander
     }
   });
 
-commander.command("migrations:up").action(() => {
+commander.command("migration:up").action(() => {
   exec(`typeorm migration:run`, (code: any, stdout: any, stderr: any) => {
     if (stderr) {
       console.log("migration error:", stderr);
@@ -34,7 +34,7 @@ commander.command("migrations:up").action(() => {
   });
 });
 
-commander.command("migrations:down").action(() => {
+commander.command("migration:down").action(() => {
   exec(`typeorm migration:revert`, (code: any, stdout: any, stderr: any) => {
     if (stderr) {
       console.log("migration error:", stderr);
@@ -44,7 +44,7 @@ commander.command("migrations:down").action(() => {
   });
 });
 
-commander.command("migrations:create <name>").action((name: string) => {
+commander.command("migration:create <name>").action((name: string) => {
   exec(
     `typeorm migration:create -n ${name}`,
     (code: any, stdout: any, stderr: any) => {
@@ -57,7 +57,7 @@ commander.command("migrations:create <name>").action((name: string) => {
   );
 });
 
-commander.command("migrations:generate <name>").action((name: string) => {
+commander.command("migration:generate <name>").action((name: string) => {
   exec(
     `typeorm migration:generate -n ${name}`,
     (code: any, stdout: any, stderr: any) => {

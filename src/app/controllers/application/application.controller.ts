@@ -1,20 +1,23 @@
 import {
   Authorized,
+  CurrentUser,
   Get,
   InternalServerError,
   JsonController,
   NotFoundError,
   Param,
+  UnauthorizedError,
 } from "routing-controllers";
 import { Service } from "typedi";
 import { InjectRepository } from "typeorm-typedi-extensions";
-// import { DirectionRepository } from "../../../db/repositories";
+
 import {
   ApplicationRepository,
+  RoleRepository,
   UserRepository,
 } from "../../../db/repositories";
 
-import { Rating } from "../../../db/entities";
+import { Rating, User } from "../../../db/entities";
 import { logger, Raven } from "../../../utils";
 
 @Service()
@@ -22,7 +25,8 @@ import { logger, Raven } from "../../../utils";
 export class ApplicationController {
   constructor(
     @InjectRepository() private userRepository: UserRepository,
-    @InjectRepository() private applicationRepository: ApplicationRepository, // @InjectRepository() private directionRepository: DirectionRepository,
+    @InjectRepository() private applicationRepository: ApplicationRepository,
+    @InjectRepository() private roleRepository: RoleRepository,
   ) {}
 
   @Get()
@@ -33,13 +37,31 @@ export class ApplicationController {
 
   @Authorized(["mentor"])
   @Get("/:uuid/approve")
-  public async approveApplication(@Param("uuid") uuid: string) {
+  public async approveApplication(
+    @CurrentUser() mentor: User,
+    @Param("uuid") uuid: string,
+  ) {
     const application = await this.applicationRepository.findOne(uuid, {
       relations: ["user", "user.directions", "user.userRatings", "direction"],
     });
 
     if (!application) {
       throw new NotFoundError("Заявка не найдена");
+    }
+
+    const adminRole = await this.roleRepository.getRoleByName("admin");
+
+    if (!adminRole) {
+      throw new InternalServerError("Ошибка проверки роли");
+    }
+
+    const isDirectionMentor = mentor.mentions.includes(application.direction);
+    const isAdmin = mentor.roles.includes(adminRole);
+
+    if (!isDirectionMentor || !isAdmin) {
+      throw new UnauthorizedError(
+        "Необходимо быть ментором данного направления для отклонения заявки",
+      );
     }
 
     const user = application.user;
@@ -56,6 +78,11 @@ export class ApplicationController {
     try {
       await this.applicationRepository.remove(application);
       await this.userRepository.save(user);
+      logger.info(
+        `Заявка от [${application.user.phoneNumber}] на направление "${
+          application.direction.name
+        }" принята ментором [${mentor.phoneNumber}]`,
+      );
       return { message: "Заявка успешно подтверждена" };
     } catch (err) {
       logger.error(err);
@@ -66,15 +93,40 @@ export class ApplicationController {
 
   @Authorized(["mentor"])
   @Get("/:uuid/decline")
-  public async declineApplication(@Param("uuid") uuid: string) {
+  public async declineApplication(
+    @CurrentUser() mentor: User,
+    @Param("uuid") uuid: string,
+  ) {
     const application = await this.applicationRepository.findOne(uuid, {
-      relations: ["user", "direction"],
+      relations: ["user", "direction", "direction.mentors"],
     });
+
     if (!application) {
       throw new NotFoundError("Заявка не найдена");
     }
+
+    const adminRole = await this.roleRepository.getRoleByName("admin");
+
+    if (!adminRole) {
+      throw new InternalServerError("Ошибка проверки роли");
+    }
+
+    if (
+      !mentor.mentions.includes(application.direction) ||
+      !mentor.roles.includes(adminRole)
+    ) {
+      throw new UnauthorizedError(
+        "Необходимо быть ментором данного направления для отклонения заявки",
+      );
+    }
+
     try {
       await this.applicationRepository.remove(application);
+      logger.info(
+        `Заявка от [${application.user.phoneNumber}] на направление "${
+          application.direction.name
+        }" отклонена ментором [${mentor.phoneNumber}]`,
+      );
       return { message: "Заявка успешно отклонена" };
     } catch (err) {
       logger.error(err);

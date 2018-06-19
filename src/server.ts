@@ -14,7 +14,7 @@ const database = Container.get(Database);
 
 database.connect().then(async () => {
   app.listen(PORT, () => {
-    logger.info(`Server started at http://localhost:${PORT}`);
+    logger.info(`Сервер запущен на http://localhost:${PORT}`);
     if (process.send) {
       process.send!("ready");
     }
@@ -25,6 +25,7 @@ process.on("SIGINT", () => {
   database
     .disconnect()
     .then(() => {
+      logger.info("БД успешно отключена");
       process.exit(0);
     })
     .catch((err) => {
