@@ -78,7 +78,11 @@ export class DirectionController {
 
     try {
       await this.applicationRepository.save(application);
-
+      logger.info(
+        `Пользователь [${
+          application.user.phoneNumber
+        }] подал заявку на направление "${application.direction.name}"`,
+      );
       return { status: 201, message: "Заявка успешно создана" };
     } catch (err) {
       logger.error(err);
@@ -177,6 +181,7 @@ export class DirectionController {
   @Authorized(["admin"])
   @Post()
   public async createDirection(
+    @CurrentUser() admin: User,
     @BodyParam("name", { required: true })
     name: string,
     @BodyParam("description", { required: true })
@@ -203,6 +208,11 @@ export class DirectionController {
 
     try {
       await this.directionRepository.save(newDirection);
+      logger.info(
+        `Администратор [${admin.phoneNumber}] создал направление "${
+          newDirection.name
+        }"`,
+      );
       return { message: "Направление успешно создано" };
     } catch (err) {
       logger.error(err);

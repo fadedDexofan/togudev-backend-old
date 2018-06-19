@@ -75,7 +75,7 @@ export class RatingController {
     reason: string,
   ) {
     const rating = await this.ratingRepository.findOne(uuid, {
-      relations: ["ratingTransactions", "ratingOwner", "direction"],
+      relations: ["ratingTransactions", "direction", "ratingOwner"],
     });
 
     if (!rating) {
@@ -98,7 +98,7 @@ export class RatingController {
     }
 
     const transaction = new RatingTransaction();
-    transaction.author = rating.ratingOwner;
+    transaction.author = mentor;
     transaction.rating = rating;
     transaction.reason = reason;
     transaction.valueChange = valueChange;
@@ -108,7 +108,11 @@ export class RatingController {
     try {
       await this.ratingRepository.save(rating);
       await this.transactionRepository.save(transaction);
-
+      logger.info(
+        `Ментор [${mentor.phoneNumber}] изменил рейтинг пользователю [${
+          rating.ratingOwner.phoneNumber
+        }]`,
+      );
       return { message: "Рейтинг успешно изменен" };
     } catch (err) {
       logger.error(err);

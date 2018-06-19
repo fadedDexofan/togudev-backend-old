@@ -111,18 +111,12 @@ export class AuthController {
 
     try {
       await this.userRepository.save(newUser);
-
+      logger.info(`Пользователь [${newUser.phoneNumber}] зарегистрировался`);
       return { status: 201, message: "Пользователь успешно зарегистрирован" };
     } catch (err) {
-      if (err.name === "QueryFailedError") {
-        throw new UserAlreadyExistsError(
-          "Пользователь с данным телефоном уже зарегистрирован",
-        );
-      } else {
-        logger.error(err);
-        Raven.captureException(err);
-        throw new InternalServerError("Ошибка регистрации");
-      }
+      logger.error(err);
+      Raven.captureException(err);
+      throw new InternalServerError("Ошибка регистрации");
     }
   }
 
@@ -340,11 +334,15 @@ export class AuthController {
       );
 
       if (smsTask === 100) {
+        logger.info(`СМС подтверждение отправлено на номер [${phoneNumber}]`);
         return {
           status: 200,
           message: `Проверочный код отправлен на номер ${phoneNumber}`,
         };
       } else {
+        logger.warn(
+          `Не удалось отправить СМС подтверждение на номер [${phoneNumber}]. Код ошибки: ${smsTask}`,
+        );
         return {
           message: `Не удалось отправить СМС сообщение. status_code: ${smsTask}`,
         };
@@ -391,6 +389,7 @@ export class AuthController {
         { phoneToken: true, phoneNumber },
         { algorithm: "HS512", expiresIn: "1d" },
       );
+      logger.info(`Номер [${phoneNumber}] успешно подтвержден`);
       return {
         status: 200,
         message: "Номер успешно подтвержден",
