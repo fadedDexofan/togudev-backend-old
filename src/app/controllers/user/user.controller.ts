@@ -6,7 +6,6 @@ import {
   Get,
   InternalServerError,
   JsonController,
-  NotFoundError,
   Param,
   Patch,
 } from "routing-controllers";
@@ -32,7 +31,7 @@ export class UserController {
   @Get("/profile")
   public async profile(@CurrentUser() user: User) {
     if (!user) {
-      return new NotFoundError("Текущий пользователь не найден");
+      return new UserNotFoundError("Текущий пользователь не найден");
     }
 
     return user;
@@ -54,6 +53,7 @@ export class UserController {
 
     try {
       await this.userRepository.save(user);
+
       return { message: "Профиль успешно отредактирован" };
     } catch (err) {
       logger.error(err);
@@ -62,6 +62,7 @@ export class UserController {
     }
   }
 
+  // TODO: Использовать queryBuilder
   @Authorized(["user"])
   @Get("/profile/:uuid")
   public async getUser(@CurrentUser() user: User, @Param("uuid") uuid: string) {
