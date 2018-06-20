@@ -73,9 +73,9 @@ export class RatingController {
       throw new NotFoundError("Рейтинг не найден");
     }
 
-    const isDirectionMentor = this.roleHelper.hasObject(
+    const isDirectionMentor = this.roleHelper.isDirectionMentor(
       rating.direction,
-      mentor.mentions,
+      mentor,
     );
     const isAdmin = await this.roleHelper.hasRole("admin", mentor.roles);
 

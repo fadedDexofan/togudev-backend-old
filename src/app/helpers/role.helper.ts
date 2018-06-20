@@ -1,7 +1,7 @@
 import { Service } from "typedi";
 import { InjectRepository } from "typeorm-typedi-extensions";
 
-import { Role } from "../../db/entities";
+import { Direction, Role, User } from "../../db/entities";
 import { RoleRepository } from "../../db/repositories";
 
 @Service()
@@ -18,7 +18,11 @@ export class RoleHelper {
     return this.hasObject(findedRole, roles);
   }
 
-  public hasObject(object: any, array: any[]) {
+  public isDirectionMentor(direction: Direction, mentor: User): boolean {
+    return this.hasObject(direction, mentor.mentions);
+  }
+
+  private hasObject(object: any, array: any[]) {
     if (object.uuid) {
       return Boolean(
         array.filter((obj) => {

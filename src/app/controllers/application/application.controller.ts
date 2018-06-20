@@ -48,9 +48,9 @@ export class ApplicationController {
       throw new NotFoundError("Заявка не найдена");
     }
 
-    const isDirectionMentor = this.roleHelper.hasObject(
+    const isDirectionMentor = this.roleHelper.isDirectionMentor(
       application.direction,
-      mentor.mentions,
+      mentor,
     );
     const isAdmin = await this.roleHelper.hasRole("admin", mentor.roles);
 
@@ -102,9 +102,9 @@ export class ApplicationController {
       throw new NotFoundError("Заявка не найдена");
     }
 
-    const isDirectionMentor = this.roleHelper.hasObject(
+    const isDirectionMentor = this.roleHelper.isDirectionMentor(
       application.direction,
-      mentor.mentions,
+      mentor,
     );
     const isAdmin = await this.roleHelper.hasRole("admin", mentor.roles);
 
