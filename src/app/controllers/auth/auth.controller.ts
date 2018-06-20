@@ -112,6 +112,7 @@ export class AuthController {
     try {
       await this.userRepository.save(newUser);
       logger.info(`Пользователь [${newUser.phoneNumber}] зарегистрировался`);
+
       return { status: 201, message: "Пользователь успешно зарегистрирован" };
     } catch (err) {
       logger.error(err);

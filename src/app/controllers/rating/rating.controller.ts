@@ -20,6 +20,7 @@ import {
   RoleRepository,
 } from "../../../db/repositories";
 import { logger, Raven } from "../../../utils";
+import { hasObject } from "../../helpers";
 
 @Service()
 @JsonController("/ratings")
@@ -37,12 +38,10 @@ export class RatingController {
     @CurrentUser() user: User,
     @Param("uuid") uuid: string,
   ) {
-    const rating = await this.ratingRepository.findOne(uuid, {
-      relations: ["ratingOwner", "direction", "ratingTransactions"],
-    });
+    const rating = await this.ratingRepository.getRatingByUuid(uuid);
 
     if (!rating) {
-      throw new NotFoundError("Рейтинг с данным id не найден");
+      throw new NotFoundError("Рейтинг с данным uuid не найден");
     }
 
     const mentorRole = await this.roleRepository.getRoleByName("mentor");
@@ -51,13 +50,12 @@ export class RatingController {
       throw new InternalServerError("Ошибка проверки доступа");
     }
 
-    const isMentor = user.roles.includes(mentorRole);
+    const isMentor = hasObject(mentorRole, user.roles);
     const isRatingOwner = rating.ratingOwner.uuid === user.uuid;
 
     if (isMentor || isRatingOwner) {
       return rating;
     } else {
-      delete rating.ratingOwner.phoneNumber;
       delete rating.ratingTransactions;
 
       return rating;
@@ -88,8 +86,8 @@ export class RatingController {
       throw new InternalServerError("Ошибка проверки роли");
     }
 
-    const isDirectionMentor = mentor.mentions.includes(rating.direction);
-    const isAdmin = mentor.roles.includes(adminRole);
+    const isDirectionMentor = hasObject(rating.direction, mentor.mentions);
+    const isAdmin = hasObject(adminRole, mentor.roles);
 
     if (!isDirectionMentor || !isAdmin) {
       throw new UnauthorizedError(

@@ -11,7 +11,6 @@ import {
   Param,
   Patch,
   Post,
-  QueryParam,
 } from "routing-controllers";
 import { Service } from "typedi";
 import { InjectRepository } from "typeorm-typedi-extensions";
@@ -22,7 +21,6 @@ import {
   ApplicationRepository,
   DirectionRepository,
   RatingRepository,
-  RoleRepository,
   UserRepository,
 } from "../../../db/repositories";
 import { logger, Raven } from "../../../utils";
@@ -35,7 +33,6 @@ export class DirectionController {
     @InjectRepository() private directionRepository: DirectionRepository,
     @InjectRepository() private applicationRepository: ApplicationRepository,
     @InjectRepository() private ratingRepository: RatingRepository,
-    @InjectRepository() private roleRepository: RoleRepository,
   ) {}
 
   @Get()
@@ -93,39 +90,14 @@ export class DirectionController {
 
   @Authorized(["user"])
   @Get("/:id")
-  public async getDirection(
-    @CurrentUser() user: User,
-    @Param("id") id: number,
-  ) {
-    const direction = await this.directionRepository.findOne(id, {
-      relations: ["mentors", "participants"],
-    });
+  public async getDirection(@Param("id") id: number) {
+    const direction = await this.directionRepository.getDirectionById(id);
 
     if (!direction) {
       throw new NotFoundError("Указанное направление не найден");
     }
 
-    const mentorRole = await this.roleRepository.getRoleByName("mentor");
-
-    if (!mentorRole) {
-      throw new InternalServerError("Ошибка проверки роли");
-    }
-
-    const isMentor = user.roles.includes(mentorRole);
-
-    if (isMentor) {
-      return direction;
-    } else {
-      direction.mentors = direction.mentors.map((mentor) => {
-        delete mentor.phoneNumber;
-        return mentor;
-      });
-      direction.participants = direction.participants.map((participant) => {
-        delete participant.phoneNumber;
-        return participant;
-      });
-      return direction;
-    }
+    return direction;
   }
 
   @Authorized(["user"])
@@ -133,48 +105,18 @@ export class DirectionController {
   public async getAllDirectionRatings(
     @CurrentUser() user: User,
     @Param("id") id: number,
-    @QueryParam("limit") limit?: number,
-    @QueryParam("offset") offset?: number,
   ) {
-    if (limit) {
-      limit = limit <= 0 ? 1 : limit;
-    }
-    if (offset) {
-      offset = offset < 0 ? 0 : offset;
-    }
-
     const direction = await this.directionRepository.findOne(id);
 
     if (!direction) {
       throw new NotFoundError("Направление не найдено");
     }
 
-    const mentorRole = await this.roleRepository.getRoleByName("mentor");
-    if (!mentorRole) {
-      throw new InternalServerError("Ошибка проверки доступа");
-    }
+    const ratings = await this.ratingRepository.getRatingsByDirection(
+      direction,
+    );
 
-    const isMentor = user.roles.includes(mentorRole);
-
-    const ratings = await this.ratingRepository.find({
-      relations: ["ratingOwner"],
-      where: { direction },
-      take: limit,
-      skip: offset,
-    });
-
-    if (isMentor) {
-      return ratings;
-    } else {
-      if (!ratings.length) {
-        return [];
-      }
-
-      return ratings.map((rating) => {
-        delete rating.ratingOwner.phoneNumber;
-        return rating;
-      });
-    }
+    return ratings;
   }
 
   @HttpCode(201)
@@ -237,13 +179,17 @@ export class DirectionController {
     }
 
     const updatedDirection = new Direction();
+
     if (name) {
       updatedDirection.name = name;
     }
+
     if (description) {
       updatedDirection.description = description;
     }
+
     let findedMentors: User[];
+
     if (mentors) {
       findedMentors = await this.userRepository.findByIds(mentors);
 
@@ -253,6 +199,7 @@ export class DirectionController {
 
       updatedDirection.mentors = findedMentors;
     }
+
     updatedDirection.id = direction.id;
     updatedDirection.participants = direction.participants;
 

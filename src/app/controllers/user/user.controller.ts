@@ -19,6 +19,7 @@ import { Profile, User } from "../../../db/entities";
 import { RoleRepository, UserRepository } from "../../../db/repositories";
 import { logger, Raven } from "../../../utils";
 import { UserNotFoundError } from "../../errors";
+import { hasObject } from "../../helpers";
 
 @Service()
 @JsonController("/users")
@@ -71,7 +72,8 @@ export class UserController {
       throw new InternalServerError("Ошибка проверки доступа");
     }
 
-    const isMentor = user.roles.includes(mentorRole);
+    const isMentor = hasObject(mentorRole, user.roles);
+
     const publicRelations = [
       "directions",
       "mentions",

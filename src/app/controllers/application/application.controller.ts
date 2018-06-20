@@ -11,14 +11,14 @@ import {
 import { Service } from "typedi";
 import { InjectRepository } from "typeorm-typedi-extensions";
 
+import { Rating, User } from "../../../db/entities";
 import {
   ApplicationRepository,
   RoleRepository,
   UserRepository,
 } from "../../../db/repositories";
-
-import { Rating, User } from "../../../db/entities";
 import { logger, Raven } from "../../../utils";
+import { hasObject } from "../../helpers";
 
 @Service()
 @JsonController("/applications")
@@ -32,7 +32,7 @@ export class ApplicationController {
   @Get()
   @Authorized(["mentor"])
   public async getApplications() {
-    return this.applicationRepository.find();
+    return this.applicationRepository.getApplications();
   }
 
   @Authorized(["mentor"])
@@ -55,8 +55,8 @@ export class ApplicationController {
       throw new InternalServerError("Ошибка проверки роли");
     }
 
-    const isDirectionMentor = mentor.mentions.includes(application.direction);
-    const isAdmin = mentor.roles.includes(adminRole);
+    const isDirectionMentor = hasObject(application.direction, mentor.mentions);
+    const isAdmin = hasObject(adminRole, mentor.roles);
 
     if (!isDirectionMentor || !isAdmin) {
       throw new UnauthorizedError(
@@ -83,6 +83,7 @@ export class ApplicationController {
           application.direction.name
         }" принята ментором [${mentor.phoneNumber}]`,
       );
+
       return { message: "Заявка успешно подтверждена" };
     } catch (err) {
       logger.error(err);
@@ -111,10 +112,10 @@ export class ApplicationController {
       throw new InternalServerError("Ошибка проверки роли");
     }
 
-    if (
-      !mentor.mentions.includes(application.direction) ||
-      !mentor.roles.includes(adminRole)
-    ) {
+    const isDirectionMentor = hasObject(application.direction, mentor.mentions);
+    const isAdmin = hasObject(adminRole, mentor.roles);
+
+    if (!isDirectionMentor || !isAdmin) {
       throw new UnauthorizedError(
         "Необходимо быть ментором данного направления для отклонения заявки",
       );
@@ -127,6 +128,7 @@ export class ApplicationController {
           application.direction.name
         }" отклонена ментором [${mentor.phoneNumber}]`,
       );
+
       return { message: "Заявка успешно отклонена" };
     } catch (err) {
       logger.error(err);
