@@ -14,11 +14,10 @@ import { InjectRepository } from "typeorm-typedi-extensions";
 import { Rating, User } from "../../../db/entities";
 import {
   ApplicationRepository,
-  RoleRepository,
   UserRepository,
 } from "../../../db/repositories";
 import { logger, Raven } from "../../../utils";
-import { hasObject } from "../../helpers";
+import { RoleHelper } from "../../helpers";
 
 @Service()
 @JsonController("/applications")
@@ -26,7 +25,7 @@ export class ApplicationController {
   constructor(
     @InjectRepository() private userRepository: UserRepository,
     @InjectRepository() private applicationRepository: ApplicationRepository,
-    @InjectRepository() private roleRepository: RoleRepository,
+    private roleHelper: RoleHelper,
   ) {}
 
   @Get()
@@ -49,14 +48,11 @@ export class ApplicationController {
       throw new NotFoundError("Заявка не найдена");
     }
 
-    const adminRole = await this.roleRepository.getRoleByName("admin");
-
-    if (!adminRole) {
-      throw new InternalServerError("Ошибка проверки роли");
-    }
-
-    const isDirectionMentor = hasObject(application.direction, mentor.mentions);
-    const isAdmin = hasObject(adminRole, mentor.roles);
+    const isDirectionMentor = this.roleHelper.hasObject(
+      application.direction,
+      mentor.mentions,
+    );
+    const isAdmin = await this.roleHelper.hasRole("admin", mentor.roles);
 
     if (!isDirectionMentor || !isAdmin) {
       throw new UnauthorizedError(
@@ -106,14 +102,11 @@ export class ApplicationController {
       throw new NotFoundError("Заявка не найдена");
     }
 
-    const adminRole = await this.roleRepository.getRoleByName("admin");
-
-    if (!adminRole) {
-      throw new InternalServerError("Ошибка проверки роли");
-    }
-
-    const isDirectionMentor = hasObject(application.direction, mentor.mentions);
-    const isAdmin = hasObject(adminRole, mentor.roles);
+    const isDirectionMentor = this.roleHelper.hasObject(
+      application.direction,
+      mentor.mentions,
+    );
+    const isAdmin = await this.roleHelper.hasRole("admin", mentor.roles);
 
     if (!isDirectionMentor || !isAdmin) {
       throw new UnauthorizedError(

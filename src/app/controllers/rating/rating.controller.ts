@@ -17,19 +17,18 @@ import { RatingTransaction, User } from "../../../db/entities";
 import {
   RatingRepository,
   RatingTransactionRepository,
-  RoleRepository,
 } from "../../../db/repositories";
 import { logger, Raven } from "../../../utils";
-import { hasObject } from "../../helpers";
+import { RoleHelper } from "../../helpers";
 
 @Service()
 @JsonController("/ratings")
 export class RatingController {
   constructor(
-    @InjectRepository() private roleRepository: RoleRepository,
     @InjectRepository() private ratingRepository: RatingRepository,
     @InjectRepository()
     private transactionRepository: RatingTransactionRepository,
+    private roleHelper: RoleHelper,
   ) {}
 
   @Authorized(["user"])
@@ -44,13 +43,7 @@ export class RatingController {
       throw new NotFoundError("Рейтинг с данным uuid не найден");
     }
 
-    const mentorRole = await this.roleRepository.getRoleByName("mentor");
-
-    if (!mentorRole) {
-      throw new InternalServerError("Ошибка проверки доступа");
-    }
-
-    const isMentor = hasObject(mentorRole, user.roles);
+    const isMentor = await this.roleHelper.hasRole("mentor", user.roles);
     const isRatingOwner = rating.ratingOwner.uuid === user.uuid;
 
     if (isMentor || isRatingOwner) {
@@ -80,14 +73,11 @@ export class RatingController {
       throw new NotFoundError("Рейтинг не найден");
     }
 
-    const adminRole = await this.roleRepository.getRoleByName("admin");
-
-    if (!adminRole) {
-      throw new InternalServerError("Ошибка проверки роли");
-    }
-
-    const isDirectionMentor = hasObject(rating.direction, mentor.mentions);
-    const isAdmin = hasObject(adminRole, mentor.roles);
+    const isDirectionMentor = this.roleHelper.hasObject(
+      rating.direction,
+      mentor.mentions,
+    );
+    const isAdmin = await this.roleHelper.hasRole("admin", mentor.roles);
 
     if (!isDirectionMentor || !isAdmin) {
       throw new UnauthorizedError(

@@ -7,7 +7,6 @@ import {
   InternalServerError,
   JsonController,
   NotFoundError,
-  OnUndefined,
   Param,
   Patch,
 } from "routing-controllers";
@@ -16,17 +15,17 @@ import { InjectRepository } from "typeorm-typedi-extensions";
 import { isEmail } from "validator";
 
 import { Profile, User } from "../../../db/entities";
-import { RoleRepository, UserRepository } from "../../../db/repositories";
+import { UserRepository } from "../../../db/repositories";
 import { logger, Raven } from "../../../utils";
 import { UserNotFoundError } from "../../errors";
-import { hasObject } from "../../helpers";
+import { RoleHelper } from "../../helpers";
 
 @Service()
 @JsonController("/users")
 export class UserController {
   constructor(
     @InjectRepository() private userRepository: UserRepository,
-    @InjectRepository() private roleRepository: RoleRepository,
+    private roleHelper: RoleHelper,
   ) {}
 
   @Authorized(["user"])
@@ -65,14 +64,8 @@ export class UserController {
 
   @Authorized(["user"])
   @Get("/profile/:uuid")
-  @OnUndefined(UserNotFoundError)
   public async getUser(@CurrentUser() user: User, @Param("uuid") uuid: string) {
-    const mentorRole = await this.roleRepository.getRoleByName("mentor");
-    if (!mentorRole) {
-      throw new InternalServerError("Ошибка проверки доступа");
-    }
-
-    const isMentor = hasObject(mentorRole, user.roles);
+    const isMentor = await this.roleHelper.hasRole("mentor", user.roles);
 
     const publicRelations = [
       "directions",

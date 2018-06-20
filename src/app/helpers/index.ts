@@ -1,1 +1,1 @@
-export * from "./hasObject.helper";
+export * from "./role.helper";
