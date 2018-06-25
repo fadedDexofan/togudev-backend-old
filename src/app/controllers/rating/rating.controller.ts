@@ -56,7 +56,7 @@ export class RatingController {
   }
 
   @Authorized(["mentor"])
-  @Post("/:uuid/add")
+  @Post("/:uuid")
   public async addRating(
     @CurrentUser() mentor: User,
     @Param("uuid") uuid: string,

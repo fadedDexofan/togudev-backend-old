@@ -108,6 +108,7 @@ export class AuthController {
     newUser.password = password;
     newUser.roles = [role];
     newUser.profile = new Profile();
+    newUser.achievements = [];
 
     try {
       await this.userRepository.save(newUser);

@@ -14,6 +14,7 @@ import {
   UpdateDateColumn,
 } from "typeorm";
 import { BcryptService } from "../../services";
+import { Achievement } from "./achievement.entity";
 import { Direction } from "./direction.entity";
 import { Profile } from "./profile.entity";
 import { Rating } from "./rating.entity";
@@ -55,6 +56,10 @@ export class User {
   @OneToOne((type) => Profile, { cascade: true })
   @JoinColumn()
   public profile: Profile;
+
+  @ManyToMany((type) => Achievement, { cascade: true })
+  @JoinTable()
+  public achievements: Achievement[];
   @CreateDateColumn() public createdAt?: Date;
   @UpdateDateColumn() public updatedAt?: Date;
 

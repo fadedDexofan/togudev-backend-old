@@ -6,3 +6,4 @@ export * from "./phoneVerification.repository";
 export * from "./rating.repository";
 export * from "./application.repository";
 export * from "./ratingTransaction.repository";
+export * from "./achievement.repository";

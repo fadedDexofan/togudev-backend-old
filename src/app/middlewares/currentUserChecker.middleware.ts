@@ -22,6 +22,7 @@ export async function currentUserChecker(
       "mentions",
       "roles",
       "directions",
+      "achievements",
     ],
   });
 }

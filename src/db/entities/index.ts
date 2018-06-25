@@ -7,3 +7,4 @@ export * from "./ratingTransaction.entity";
 export * from "./profile.entity";
 export * from "./phoneVerification.entity";
 export * from "./application.entity";
+export * from "./achievement.entity";
