@@ -7,13 +7,13 @@ export class DirectionRepository extends Repository<Direction> {
     return this.createQueryBuilder("direction")
       .where("direction.id = :id", { id })
       .leftJoinAndSelect("direction.participants", "participants")
-      .leftJoinAndSelect("direction.mentors", "mentors")
+      .leftJoinAndSelect("direction.mentor", "mentor")
       .select([
         "direction.id",
         "direction.name",
         "direction.description",
         "participants.uuid",
-        "mentors.uuid",
+        "mentor.uuid",
       ])
       .getOne();
   }

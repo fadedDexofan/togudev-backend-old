@@ -4,6 +4,8 @@ import { getCustomRepository } from "typeorm";
 
 import { UserRepository } from "../../db/repositories";
 import { JWTService } from "../../services";
+import { ApiErrorEnum } from "../errors";
+import { ApiError } from "../helpers";
 
 const jwtService = Container.get(JWTService);
 
@@ -12,10 +14,21 @@ export async function authorizationChecker(
   roles: string[],
 ): Promise<boolean> {
   const token = jwtService.extractToken(ctx.request.headers);
-  const payload: any = await jwtService.verify(token);
-
-  if (!payload) {
-    return false;
+  let payload: any;
+  try {
+    payload = await jwtService.verify(token);
+  } catch (err) {
+    if (err.name === "TokenExpiredError") {
+      throw new ApiError(
+        ApiErrorEnum.TOKEN_EXPIRED,
+        "Время жизни access token истекло",
+      );
+    } else {
+      throw new ApiError(
+        ApiErrorEnum.TOKEN_REQUIRED,
+        "Некорректный access token",
+      );
+    }
   }
 
   const userFromToken = await getCustomRepository(UserRepository).findOne(
@@ -24,7 +37,7 @@ export async function authorizationChecker(
   );
 
   if (!userFromToken) {
-    return false;
+    throw new ApiError(ApiErrorEnum.NOT_FOUND, "Пользователь не найден");
   }
 
   if (roles && roles.length) {
@@ -33,7 +46,7 @@ export async function authorizationChecker(
       userRoles.includes(role),
     );
     if (!isAuthorized) {
-      return false;
+      throw new ApiError(ApiErrorEnum.UNAUTHORIZED, "Доступ запрещен");
     }
   }
 

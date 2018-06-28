@@ -1,8 +1,10 @@
 import {
   Column,
   Entity,
+  JoinColumn,
   JoinTable,
   ManyToMany,
+  ManyToOne,
   PrimaryGeneratedColumn,
 } from "typeorm";
 import { User } from "./user.entity";
@@ -10,9 +12,9 @@ import { User } from "./user.entity";
 @Entity()
 export class Direction {
   @PrimaryGeneratedColumn() public id?: number;
-  @ManyToMany((type) => User, (user) => user.mentions, { cascade: true })
-  @JoinTable()
-  public mentors: User[];
+  @ManyToOne((type) => User, (user) => user.mentions, { cascade: true })
+  @JoinColumn()
+  public mentor: User;
   @Column({ unique: true })
   public name: string;
   @Column("text") public description: string;

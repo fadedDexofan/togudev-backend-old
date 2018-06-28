@@ -18,7 +18,7 @@ export class App {
     routingUseContainer(Container);
     this.application = createKoaServer({
       development: DEVELOPMENT,
-      routePrefix: "/api",
+      routePrefix: "/v1",
       cors: true,
       controllers: [__dirname + "/../app/controllers/**/*.controller.js"],
       middlewares: [__dirname + "/../app/middlewares/**/*.middleware.js"],

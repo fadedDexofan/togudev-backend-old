@@ -2,15 +2,12 @@ import * as jwt from "jsonwebtoken";
 import moment from "moment";
 import {
   Authorized,
-  BadRequestError,
   BodyParam,
   CurrentUser,
   Get,
   HeaderParams,
   HttpCode,
-  InternalServerError,
   JsonController,
-  NotFoundError,
   Post,
 } from "routing-controllers";
 import { Service } from "typedi";
@@ -31,12 +28,8 @@ import {
 } from "../../../db/repositories";
 import { JWTService, SMSService } from "../../../services";
 import { logger, Raven } from "../../../utils";
-import {
-  BadRefreshTokenError,
-  UserAlreadyExistsError,
-  UserNotFoundError,
-  WrongPasswordError,
-} from "../../errors";
+import { ApiErrorEnum } from "../../errors";
+import { ApiError, ApiResponse } from "../../helpers";
 
 function getRandomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min)) + min;
@@ -62,14 +55,18 @@ export class AuthController {
     @BodyParam("password", { required: true })
     password: string,
   ) {
-    if (password.length < 6 || password.length > 24) {
-      throw new BadRequestError("Пароль должен быть от 6 до 24 символов");
-    }
-
     const phoneToken = this.jwtService.extractToken(headers);
     if (!phoneToken) {
-      throw new BadRequestError(
+      throw new ApiError(
+        ApiErrorEnum.BAD_REGISTRATION_TOKEN,
         "Не передан токен регистрации или он имеет неверный формат. Используйте Authorization: Bearer <token>",
+      );
+    }
+
+    if (password.length < 6 || password.length > 24) {
+      throw new ApiError(
+        ApiErrorEnum.BAD_PASSWORD,
+        "Пароль должен быть от 6 до 24 символов",
       );
     }
 
@@ -84,21 +81,28 @@ export class AuthController {
 
     const dupUser = await this.userRepository.getUserByPhone(phoneNumber);
     if (dupUser) {
-      throw new UserAlreadyExistsError();
+      throw new ApiError(
+        ApiErrorEnum.USER_EXISTS,
+        "Пользователь с данным номером уже зарегистрирован",
+      );
     }
 
     let role = await this.roleRepository.getRoleByName("user");
+
     if (!role) {
       try {
         await this.roleRepository.createRole("user");
       } catch (err) {
         logger.error(err);
         Raven.captureException(err);
-        throw new InternalServerError('Не удалось создать роль "user"');
+        throw new ApiError(
+          ApiErrorEnum.ROLE_CREATION,
+          'Не удалось создать роль "user"',
+        );
       }
       role = await this.roleRepository.getRoleByName("user");
       if (!role) {
-        throw new InternalServerError("Ошибка создания роли");
+        throw new ApiError(ApiErrorEnum.ROLE_CREATION, "Ошибка создания роли");
       }
     }
 
@@ -114,11 +118,13 @@ export class AuthController {
       await this.userRepository.save(newUser);
       logger.info(`Пользователь [${newUser.phoneNumber}] зарегистрировался`);
 
-      return { status: 201, message: "Пользователь успешно зарегистрирован" };
+      return new ApiResponse({
+        message: "Пользователь успешно зарегистрирован",
+      });
     } catch (err) {
       logger.error(err);
       Raven.captureException(err);
-      throw new InternalServerError("Ошибка регистрации");
+      throw new ApiError(ApiErrorEnum.REGISTRATION, "Ошибка регистрации");
     }
   }
 
@@ -138,13 +144,16 @@ export class AuthController {
       .getOne();
 
     if (!user) {
-      throw new UserNotFoundError("Пользователь с таким логином не найден");
+      throw new ApiError(
+        ApiErrorEnum.NOT_FOUND,
+        "Пользователь с таким логином не найден",
+      );
     }
 
     const passwordIsCorrect = await user.checkPassword(password);
 
     if (!passwordIsCorrect) {
-      throw new WrongPasswordError();
+      throw new ApiError(ApiErrorEnum.WRONG_PASSWORD, "Неверный пароль");
     }
 
     const accessToken = await this.jwtService.makeAccessToken(user);
@@ -163,15 +172,15 @@ export class AuthController {
     try {
       await this.userRepository.save(user);
 
-      return {
+      return new ApiResponse({
         accessToken: accessToken.token,
         refreshToken,
         expires_in: accessToken.exp,
-      };
+      });
     } catch (err) {
       logger.error(err);
       Raven.captureException(err);
-      throw new InternalServerError("Ошибка входа");
+      throw new ApiError(ApiErrorEnum.LOGIN_FAIL, "Ошибка входа");
     }
   }
 
@@ -182,7 +191,10 @@ export class AuthController {
   ) {
     const tokenData: any = jwt.decode(refreshToken);
     if (!tokenData) {
-      throw new BadRefreshTokenError();
+      throw new ApiError(
+        ApiErrorEnum.BAD_REFRESH_TOKEN,
+        "Некорректный Refresh Token",
+      );
     }
     const expired = tokenData.exp < new Date().getTime() / 1000;
     const uuid = tokenData.sub;
@@ -192,9 +204,11 @@ export class AuthController {
         refreshToken,
       },
     });
+
     if (!tokenInDB) {
-      throw new NotFoundError("Токен не найден");
+      throw new ApiError(ApiErrorEnum.NOT_FOUND, "Токен не найден");
     }
+
     try {
       await this.jwtService.verify(refreshToken);
     } catch (err) {
@@ -203,9 +217,15 @@ export class AuthController {
       } catch (err) {
         logger.error(err);
         Raven.captureException(err);
-        throw new InternalServerError("Ошибка удаления токена");
+        throw new ApiError(
+          ApiErrorEnum.TOKEN_REMOVAL,
+          "Ошибка удаления токена",
+        );
       }
-      throw new BadRefreshTokenError("Некорректный Refresh токен");
+      throw new ApiError(
+        ApiErrorEnum.BAD_REFRESH_TOKEN,
+        "Некорректный Refresh токен",
+      );
     }
 
     if (expired) {
@@ -214,7 +234,10 @@ export class AuthController {
       } catch (err) {
         logger.error(err);
         Raven.captureException(err);
-        throw new InternalServerError("Ошибка удаления токена");
+        throw new ApiError(
+          ApiErrorEnum.TOKEN_REMOVAL,
+          "Ошибка удаления токена",
+        );
       }
     }
 
@@ -233,15 +256,18 @@ export class AuthController {
       await this.refreshRepository.remove(tokenInDB);
       await this.refreshRepository.save(rToken);
 
-      return {
+      return new ApiResponse({
         accessToken: newAccessToken.token,
         refreshToken: newRefreshToken,
         expires_in: newAccessToken.exp,
-      };
+      });
     } catch (err) {
       logger.error(err);
       Raven.captureException(err);
-      throw new InternalServerError("Ошибка сохранения токена");
+      throw new ApiError(
+        ApiErrorEnum.TOKEN_REFRESH,
+        "Ошибка обновления токена",
+      );
     }
   }
 
@@ -255,13 +281,13 @@ export class AuthController {
     try {
       await this.refreshRepository.remove(userTokens);
 
-      return {
+      return new ApiResponse({
         message: "Токены отозваны. Перезайдите в систему",
-      };
+      });
     } catch (err) {
       logger.error(err);
       Raven.captureException(err);
-      throw new InternalServerError(err);
+      throw new ApiError(ApiErrorEnum.TOKEN_RESET, "Ошибка сброса токенов");
     }
   }
 
@@ -273,7 +299,10 @@ export class AuthController {
     const generatedCode = getRandomInt(1000, 10000);
 
     if (!isMobilePhone(phoneNumber, "ru-RU")) {
-      throw new BadRequestError("Номер телефона имеет некорректный формат");
+      throw new ApiError(
+        ApiErrorEnum.BAD_PHONE,
+        "Номер телефона имеет некорректный формат",
+      );
     }
 
     const alreadyRegistered = await this.userRepository.findOne({
@@ -281,8 +310,9 @@ export class AuthController {
     });
 
     if (alreadyRegistered) {
-      throw new UserAlreadyExistsError(
-        "Пользователь с указанным номером уже зарегистрирована",
+      throw new ApiError(
+        ApiErrorEnum.USER_EXISTS,
+        "Пользователь с указанным номером уже зарегистрирован",
       );
     }
 
@@ -305,12 +335,18 @@ export class AuthController {
     const diffSeconds = moment().diff(moment(updatedAt), "s");
 
     if (triesCount >= 1 && diffSeconds < 60) {
-      throw new BadRequestError("Превышено количество СМС в минуту");
+      throw new ApiError(
+        ApiErrorEnum.SMS_MINUTE_LIMIT,
+        "Превышено количество СМС в минуту",
+      );
     }
 
     if (triesCount >= 3) {
       if (diffDays < 1) {
-        throw new BadRequestError("Превышено количество СМС в сутки");
+        throw new ApiError(
+          ApiErrorEnum.SMS_DAILY_LIMIT,
+          "Превышено количество СМС в сутки",
+        );
       } else {
         searchResult.attempts = 0;
       }
@@ -324,7 +360,8 @@ export class AuthController {
     } catch (err) {
       logger.error(err);
       Raven.captureException(err);
-      throw new InternalServerError(
+      throw new ApiError(
+        ApiErrorEnum.VERIFICATION_CREATE,
         "Ошибка создания заявки на подтверждение номера",
       );
     }
@@ -337,22 +374,24 @@ export class AuthController {
 
       if (smsTask === 100) {
         logger.info(`СМС подтверждение отправлено на номер [${phoneNumber}]`);
-        return {
-          status: 200,
+        return new ApiResponse({
           message: `Проверочный код отправлен на номер ${phoneNumber}`,
-        };
+        });
       } else {
         logger.warn(
           `Не удалось отправить СМС подтверждение на номер [${phoneNumber}]. Код ошибки: ${smsTask}`,
         );
-        return {
-          message: `Не удалось отправить СМС сообщение. status_code: ${smsTask}`,
-        };
+        throw new Error(
+          `Не удалось отправить СМС сообщение. status_code: ${smsTask}`,
+        );
       }
     } catch (err) {
       logger.error(err);
       Raven.captureException(err);
-      throw new InternalServerError("Ошибка отправки SMS сообщения");
+      throw new ApiError(
+        ApiErrorEnum.SMS_SEND,
+        "Ошибка отправки SMS сообщения",
+      );
     }
   }
 
@@ -369,20 +408,27 @@ export class AuthController {
 
     const isCodeCorrect = verificationCode && !Number.isNaN(verificationCode);
     if (!isCodeCorrect) {
-      throw new BadRequestError(
+      throw new ApiError(
+        ApiErrorEnum.BAD_VERIFICATION_CODE,
         "Не указан проверочный код или код имеет неверный формат",
       );
     }
 
     if (!searchResult) {
-      throw new BadRequestError("Заявка на подтверждение не найдена");
+      throw new ApiError(
+        ApiErrorEnum.VERIFICATION_NOTFOUND,
+        "Заявка на подтверждение не найдена",
+      );
     }
 
     const isCodeWrong =
       searchResult.verificationCode !== Number(verificationCode);
 
     if (isCodeWrong) {
-      throw new BadRequestError("Указан неверный проверочный код");
+      throw new ApiError(
+        ApiErrorEnum.WRONG_VERIFICATION_CODE,
+        "Указан неверный проверочный код",
+      );
     }
 
     try {
@@ -392,15 +438,15 @@ export class AuthController {
         { algorithm: "HS512", expiresIn: "1d" },
       );
       logger.info(`Номер [${phoneNumber}] успешно подтвержден`);
-      return {
-        status: 200,
-        message: "Номер успешно подтвержден",
-        phoneToken,
-      };
+
+      return new ApiResponse({ phoneToken });
     } catch (err) {
       logger.error(err);
       Raven.captureException(err);
-      throw new InternalServerError("Ошибка подтверждения номера");
+      throw new ApiError(
+        ApiErrorEnum.PHONE_VERIFICATION,
+        "Ошибка подтверждения номера",
+      );
     }
   }
 }

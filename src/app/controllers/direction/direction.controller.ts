@@ -1,13 +1,10 @@
 import {
   Authorized,
-  BadRequestError,
   BodyParam,
   CurrentUser,
   Get,
   HttpCode,
-  InternalServerError,
   JsonController,
-  NotFoundError,
   Param,
   Patch,
   Post,
@@ -24,6 +21,8 @@ import {
   UserRepository,
 } from "../../../db/repositories";
 import { logger, Raven } from "../../../utils";
+import { ApiErrorEnum } from "../../errors";
+import { ApiError, ApiResponse, RoleHelper } from "../../helpers";
 
 @Service()
 @JsonController("/directions")
@@ -33,6 +32,7 @@ export class DirectionController {
     @InjectRepository() private directionRepository: DirectionRepository,
     @InjectRepository() private applicationRepository: ApplicationRepository,
     @InjectRepository() private ratingRepository: RatingRepository,
+    private roleHelper: RoleHelper,
   ) {}
 
   @Get()
@@ -52,7 +52,7 @@ export class DirectionController {
       });
     }
 
-    return response;
+    return new ApiResponse(directions);
   }
 
   @HttpCode(201)
@@ -66,7 +66,30 @@ export class DirectionController {
     const direction = await this.directionRepository.findOne(directionId);
 
     if (!direction) {
-      throw new NotFoundError(`Направление с id ${directionId} не найдено`);
+      throw new ApiError(
+        ApiErrorEnum.NOT_FOUND,
+        "Указанное направление не найдено",
+      );
+    }
+
+    const alreadyApplied = await this.applicationRepository.findOne({
+      where: { direction, user },
+    });
+
+    if (alreadyApplied) {
+      throw new ApiError(
+        ApiErrorEnum.ALREADY_APPLIED,
+        "Вы уже подали заявку на данное направление",
+      );
+    }
+
+    const alreadyIn = this.roleHelper.hasObject(direction, user.directions);
+
+    if (alreadyIn) {
+      throw new ApiError(
+        ApiErrorEnum.ALREADY_IN_DIRECTION,
+        "Вы уже присоединились к данному направлению",
+      );
     }
 
     const application = new Application();
@@ -80,11 +103,16 @@ export class DirectionController {
           application.user.phoneNumber
         }] подал заявку на направление "${application.direction.name}"`,
       );
-      return { status: 201, message: "Заявка успешно создана" };
+      return new ApiResponse({
+        message: "Заявка успешно создана",
+      });
     } catch (err) {
       logger.error(err);
       Raven.captureException(err);
-      throw new InternalServerError("Ошибка создания заявки");
+      throw new ApiError(
+        ApiErrorEnum.APPLICATION_CREATE,
+        "Ошибка создания заявки",
+      );
     }
   }
 
@@ -94,10 +122,13 @@ export class DirectionController {
     const direction = await this.directionRepository.getDirectionById(id);
 
     if (!direction) {
-      throw new NotFoundError("Указанное направление не найден");
+      throw new ApiError(
+        ApiErrorEnum.NOT_FOUND,
+        "Указанное направление не найдено",
+      );
     }
 
-    return direction;
+    return new ApiResponse(direction);
   }
 
   @Authorized(["user"])
@@ -109,14 +140,17 @@ export class DirectionController {
     const direction = await this.directionRepository.findOne(id);
 
     if (!direction) {
-      throw new NotFoundError("Направление не найдено");
+      throw new ApiError(
+        ApiErrorEnum.NOT_FOUND,
+        "Указанное направление не найдено",
+      );
     }
 
     const ratings = await this.ratingRepository.getRatingsByDirection(
       direction,
     );
 
-    return ratings;
+    return new ApiResponse(ratings);
   }
 
   @HttpCode(201)
@@ -128,24 +162,31 @@ export class DirectionController {
     name: string,
     @BodyParam("description", { required: true })
     description: string,
-    @BodyParam("mentors", { required: true })
-    mentors: string[],
+    @BodyParam("mentorUuid", { required: true })
+    mentorUuid: string,
   ) {
-    const dupDirection = await this.directionRepository.findOne(
-      { name },
-      { relations: ["mentors"] },
-    );
+    const dupDirection = await this.directionRepository.findOne({ name });
 
     if (dupDirection) {
-      throw new BadRequestError("Направление уже существует");
+      throw new ApiError(
+        ApiErrorEnum.DIRECTION_EXISTS,
+        "Направление уже существует",
+      );
     }
 
-    const mentorsData = await this.userRepository.findByIds(mentors);
+    const mentor = await this.userRepository.findOne(mentorUuid);
+
+    if (!mentor) {
+      throw new ApiError(
+        ApiErrorEnum.NOT_FOUND,
+        "Ментор с указанным uuid не найден",
+      );
+    }
 
     const newDirection = new Direction();
     newDirection.name = name;
     newDirection.description = description;
-    newDirection.mentors = mentorsData;
+    newDirection.mentor = mentor;
     newDirection.participants = [];
 
     try {
@@ -155,11 +196,14 @@ export class DirectionController {
           newDirection.name
         }"`,
       );
-      return { message: "Направление успешно создано" };
+      return new ApiResponse({ message: "Направление успешно создано" });
     } catch (err) {
       logger.error(err);
       Raven.captureException(err);
-      throw new InternalServerError("Ошибка создания направления");
+      throw new ApiError(
+        ApiErrorEnum.DIRECTION_CREATE,
+        "Ошибка создания направления",
+      );
     }
   }
 
@@ -170,12 +214,15 @@ export class DirectionController {
     @Param("id") id: number,
     @BodyParam("name") name: string,
     @BodyParam("description") description: string,
-    @BodyParam("mentors") mentors: string[],
+    @BodyParam("mentorUuid") mentorUuid: string,
   ) {
     const direction = await this.directionRepository.findOne(id);
 
     if (!direction) {
-      throw new NotFoundError("Направление не найдено");
+      throw new ApiError(
+        ApiErrorEnum.NOT_FOUND,
+        "Указанное направление не найдено",
+      );
     }
 
     const updatedDirection = new Direction();
@@ -188,16 +235,17 @@ export class DirectionController {
       updatedDirection.description = description;
     }
 
-    let findedMentors: User[];
+    if (mentorUuid) {
+      const mentor = await this.userRepository.findOne(mentorUuid);
 
-    if (mentors) {
-      findedMentors = await this.userRepository.findByIds(mentors);
-
-      if (!findedMentors) {
-        throw new BadRequestError("Невозможно найти указанных менторов");
+      if (!mentor) {
+        throw new ApiError(
+          ApiErrorEnum.NOT_FOUND,
+          "Указанный ментор не найден",
+        );
       }
 
-      updatedDirection.mentors = findedMentors;
+      updatedDirection.mentor = mentor;
     }
 
     updatedDirection.id = direction.id;
@@ -212,11 +260,16 @@ export class DirectionController {
           direction.name
         }"`,
       );
-      return { message: "Направление успешно отредактировано" };
+      return new ApiResponse({
+        message: "Направление успешно отредактировано",
+      });
     } catch (err) {
       logger.error(err);
       Raven.captureException(err);
-      throw new InternalServerError("Не удалось отредактировать направление");
+      throw new ApiError(
+        ApiErrorEnum.DIRECTION_EDIT,
+        "Не удалось отредактировать направление",
+      );
     }
   }
 }

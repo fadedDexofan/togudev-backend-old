@@ -22,7 +22,7 @@ export class RoleHelper {
     return this.hasObject(direction, mentor.mentions);
   }
 
-  private hasObject(object: any, array: any[]) {
+  public hasObject(object: any, array: any[]) {
     if (object.uuid) {
       return Boolean(
         array.filter((obj) => {

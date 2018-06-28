@@ -2,22 +2,21 @@ import {
   Authorized,
   CurrentUser,
   Get,
-  InternalServerError,
   JsonController,
-  NotFoundError,
   Param,
-  UnauthorizedError,
 } from "routing-controllers";
 import { Service } from "typedi";
 import { InjectRepository } from "typeorm-typedi-extensions";
 
+import { isUUID } from "validator";
 import { Rating, User } from "../../../db/entities";
 import {
   ApplicationRepository,
   UserRepository,
 } from "../../../db/repositories";
 import { logger, Raven } from "../../../utils";
-import { RoleHelper } from "../../helpers";
+import { ApiErrorEnum } from "../../errors";
+import { ApiError, ApiResponse, RoleHelper } from "../../helpers";
 
 @Service()
 @JsonController("/applications")
@@ -31,7 +30,9 @@ export class ApplicationController {
   @Get()
   @Authorized(["mentor"])
   public async getApplications() {
-    return this.applicationRepository.getApplications();
+    const applications = await this.applicationRepository.getApplications();
+
+    return new ApiResponse(applications);
   }
 
   @Authorized(["mentor"])
@@ -40,22 +41,28 @@ export class ApplicationController {
     @CurrentUser() mentor: User,
     @Param("uuid") uuid: string,
   ) {
+    if (!isUUID(uuid)) {
+      throw new ApiError(ApiErrorEnum.BAD_UUID, "Некорректный uuid");
+    }
+
     const application = await this.applicationRepository.findOne(uuid, {
       relations: ["user", "user.directions", "user.userRatings", "direction"],
     });
 
     if (!application) {
-      throw new NotFoundError("Заявка не найдена");
+      throw new ApiError(ApiErrorEnum.NOT_FOUND, "Заявка не найдена");
     }
 
     const isDirectionMentor = this.roleHelper.isDirectionMentor(
       application.direction,
       mentor,
     );
+
     const isAdmin = await this.roleHelper.hasRole("admin", mentor.roles);
 
     if (!isDirectionMentor || !isAdmin) {
-      throw new UnauthorizedError(
+      throw new ApiError(
+        ApiErrorEnum.UNAUTHORIZED,
         "Необходимо быть ментором данного направления для отклонения заявки",
       );
     }
@@ -80,11 +87,14 @@ export class ApplicationController {
         }" принята ментором [${mentor.phoneNumber}]`,
       );
 
-      return { message: "Заявка успешно подтверждена" };
+      return new ApiResponse({ message: "Заявка успешно подтверждена" });
     } catch (err) {
       logger.error(err);
       Raven.captureException(err);
-      throw new InternalServerError("Ошибка принятия заявки");
+      throw new ApiError(
+        ApiErrorEnum.APPLICATION_APPROVE,
+        "Ошибка принятия заявки",
+      );
     }
   }
 
@@ -94,22 +104,28 @@ export class ApplicationController {
     @CurrentUser() mentor: User,
     @Param("uuid") uuid: string,
   ) {
+    if (!isUUID(uuid)) {
+      throw new ApiError(ApiErrorEnum.BAD_UUID, "Некорректный uuid");
+    }
+
     const application = await this.applicationRepository.findOne(uuid, {
       relations: ["user", "direction", "direction.mentors"],
     });
 
     if (!application) {
-      throw new NotFoundError("Заявка не найдена");
+      throw new ApiError(ApiErrorEnum.NOT_FOUND, "Заявка не найдена");
     }
 
     const isDirectionMentor = this.roleHelper.isDirectionMentor(
       application.direction,
       mentor,
     );
+
     const isAdmin = await this.roleHelper.hasRole("admin", mentor.roles);
 
     if (!isDirectionMentor || !isAdmin) {
-      throw new UnauthorizedError(
+      throw new ApiError(
+        ApiErrorEnum.UNAUTHORIZED,
         "Необходимо быть ментором данного направления для отклонения заявки",
       );
     }
@@ -122,11 +138,14 @@ export class ApplicationController {
         }" отклонена ментором [${mentor.phoneNumber}]`,
       );
 
-      return { message: "Заявка успешно отклонена" };
+      return new ApiResponse({ message: "Заявка успешно отклонена" });
     } catch (err) {
       logger.error(err);
       Raven.captureException(err);
-      throw new InternalServerError("Ошибка отклонения заявки");
+      throw new ApiError(
+        ApiErrorEnum.APPLICATION_DECLINE,
+        "Ошибка отклонения заявки",
+      );
     }
   }
 }

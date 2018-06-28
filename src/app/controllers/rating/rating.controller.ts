@@ -3,23 +3,22 @@ import {
   BodyParam,
   CurrentUser,
   Get,
-  InternalServerError,
   JsonController,
-  NotFoundError,
   Param,
   Post,
-  UnauthorizedError,
 } from "routing-controllers";
 import { Service } from "typedi";
 import { InjectRepository } from "typeorm-typedi-extensions";
 
+import { isUUID } from "validator";
 import { RatingTransaction, User } from "../../../db/entities";
 import {
   RatingRepository,
   RatingTransactionRepository,
 } from "../../../db/repositories";
 import { logger, Raven } from "../../../utils";
-import { RoleHelper } from "../../helpers";
+import { ApiErrorEnum } from "../../errors";
+import { ApiError, ApiResponse, RoleHelper } from "../../helpers";
 
 @Service()
 @JsonController("/ratings")
@@ -37,21 +36,28 @@ export class RatingController {
     @CurrentUser() user: User,
     @Param("uuid") uuid: string,
   ) {
+    if (!isUUID(uuid)) {
+      throw new ApiError(ApiErrorEnum.BAD_UUID, "Некорректный uuid");
+    }
+
     const rating = await this.ratingRepository.getRatingByUuid(uuid);
 
     if (!rating) {
-      throw new NotFoundError("Рейтинг с данным uuid не найден");
+      throw new ApiError(
+        ApiErrorEnum.NOT_FOUND,
+        "Рейтинг с данным uuid не найден",
+      );
     }
 
     const isMentor = await this.roleHelper.hasRole("mentor", user.roles);
     const isRatingOwner = rating.ratingOwner.uuid === user.uuid;
 
     if (isMentor || isRatingOwner) {
-      return rating;
+      return new ApiResponse(rating);
     } else {
       delete rating.ratingTransactions;
 
-      return rating;
+      return new ApiResponse(rating);
     }
   }
 
@@ -65,12 +71,16 @@ export class RatingController {
     @BodyParam("reason", { required: true })
     reason: string,
   ) {
+    if (!isUUID(uuid)) {
+      throw new ApiError(ApiErrorEnum.BAD_UUID, "Некорректный uuid");
+    }
+
     const rating = await this.ratingRepository.findOne(uuid, {
       relations: ["ratingTransactions", "direction", "ratingOwner"],
     });
 
     if (!rating) {
-      throw new NotFoundError("Рейтинг не найден");
+      throw new ApiError(ApiErrorEnum.NOT_FOUND, "Рейтинг не найден");
     }
 
     const isDirectionMentor = this.roleHelper.isDirectionMentor(
@@ -80,7 +90,8 @@ export class RatingController {
     const isAdmin = await this.roleHelper.hasRole("admin", mentor.roles);
 
     if (!isDirectionMentor || !isAdmin) {
-      throw new UnauthorizedError(
+      throw new ApiError(
+        ApiErrorEnum.UNAUTHORIZED,
         "Для совершения этого действия необходимо быть ментором данного направления",
       );
     }
@@ -101,11 +112,14 @@ export class RatingController {
           rating.ratingOwner.phoneNumber
         }]`,
       );
-      return { message: "Рейтинг успешно изменен" };
+      return new ApiResponse({ message: "Рейтинг успешно изменен" });
     } catch (err) {
       logger.error(err);
       Raven.captureException(err);
-      throw new InternalServerError("Не удалось увеличить рейтинг");
+      throw new ApiError(
+        ApiErrorEnum.RATING_ADD,
+        "Не удалось увеличить рейтинг",
+      );
     }
   }
 }

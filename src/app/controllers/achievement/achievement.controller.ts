@@ -2,10 +2,7 @@ import {
   Authorized,
   BodyParam,
   Get,
-  InternalServerError,
   JsonController,
-  NotFoundError,
-  OnUndefined,
   Param,
   Post,
 } from "routing-controllers";
@@ -15,6 +12,8 @@ import {
   AchievementRepository,
   UserRepository,
 } from "../../../db/repositories";
+import { ApiErrorEnum } from "../../errors";
+import { ApiError, ApiResponse } from "../../helpers";
 
 @Service()
 @JsonController("/achievements")
@@ -27,14 +26,23 @@ export class AchievementController {
   @Get()
   @Authorized(["user"])
   public async availableAchievements() {
-    return this.achievementRepository.find();
+    const achievements = await this.achievementRepository.find();
+    return new ApiResponse(achievements);
   }
 
   @Get("/:id")
   @Authorized(["user"])
-  @OnUndefined(NotFoundError)
   public async getAchievement(@Param("id") id: number) {
-    return this.achievementRepository.findOne(id);
+    const achievement = await this.achievementRepository.findOne(id);
+
+    if (!achievement) {
+      throw new ApiError(
+        ApiErrorEnum.NOT_FOUND,
+        "Достижение с указанным id не найдено",
+      );
+    }
+
+    return new ApiResponse(achievement);
   }
 
   @Post()
@@ -48,20 +56,33 @@ export class AchievementController {
     const achievement = await this.achievementRepository.findOne(achievementId);
 
     if (!achievement) {
-      throw new NotFoundError("Достижение с указанным id не найден");
+      throw new ApiError(
+        ApiErrorEnum.NOT_FOUND,
+        "Достижение с указанным id не найдено",
+      );
     }
 
     const user = await this.userRepository.findOne(userUuid);
 
     if (!user) {
-      throw new NotFoundError("Пользователь с указанным uuid не найден");
+      throw new ApiError(
+        ApiErrorEnum.NOT_FOUND,
+        "Пользователь с указанным uuid не найден",
+      );
     }
 
     user.achievements.push(achievement);
+
     try {
       await this.userRepository.save(user);
+      return new ApiResponse({
+        message: `Достижение успешно выдано пользователю [${user.phoneNumber}]`,
+      });
     } catch (err) {
-      throw new InternalServerError("Ошибка создания достижения");
+      throw new ApiError(
+        ApiErrorEnum.ACHIEVEMENT_GIVE,
+        "Ошибка выдачи достижения",
+      );
     }
   }
 }
