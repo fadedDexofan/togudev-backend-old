@@ -14,6 +14,7 @@ import { InjectRepository } from "typeorm-typedi-extensions";
 
 import { Application, Direction, User } from "../../../db/entities";
 
+import { isUUID } from "validator";
 import {
   ApplicationRepository,
   DirectionRepository,
@@ -216,6 +217,10 @@ export class DirectionController {
     @BodyParam("description") description: string,
     @BodyParam("mentorUuid") mentorUuid: string,
   ) {
+    if (!isUUID(mentorUuid)) {
+      throw new ApiError(ApiErrorEnum.BAD_UUID, "Некорректный uuid");
+    }
+
     const direction = await this.directionRepository.findOne(id);
 
     if (!direction) {

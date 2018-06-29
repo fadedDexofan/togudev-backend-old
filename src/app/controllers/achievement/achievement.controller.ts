@@ -8,6 +8,7 @@ import {
 } from "routing-controllers";
 import { Service } from "typedi";
 import { InjectRepository } from "typeorm-typedi-extensions";
+import { isUUID } from "validator";
 import {
   AchievementRepository,
   UserRepository,
@@ -53,6 +54,10 @@ export class AchievementController {
     @BodyParam("userUuid", { required: true })
     userUuid: string,
   ) {
+    if (!isUUID(userUuid)) {
+      throw new ApiError(ApiErrorEnum.BAD_UUID, "Некорректный uuid");
+    }
+
     const achievement = await this.achievementRepository.findOne(achievementId);
 
     if (!achievement) {

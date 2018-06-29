@@ -78,6 +78,7 @@ export class UserController {
       "userRatings",
       "profile",
       "roles",
+      "achievements",
     ];
 
     let userProfile: User | undefined;
