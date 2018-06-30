@@ -23,6 +23,7 @@ export async function currentUserChecker(
       "roles",
       "directions",
       "achievements",
+      "mentorTransactions",
     ],
   });
 }

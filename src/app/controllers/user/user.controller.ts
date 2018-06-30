@@ -76,6 +76,7 @@ export class UserController {
       "directions",
       "mentions",
       "userRatings",
+      "userRatings.direction",
       "profile",
       "roles",
       "achievements",

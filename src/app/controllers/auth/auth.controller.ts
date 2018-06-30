@@ -26,7 +26,7 @@ import {
   RoleRepository,
   UserRepository,
 } from "../../../db/repositories";
-import { JWTService, SMSService } from "../../../services";
+import { BcryptService, JWTService, SMSService } from "../../../services";
 import { logger, Raven } from "../../../utils";
 import { ApiErrorEnum } from "../../errors";
 import { ApiError, ApiResponse } from "../../helpers";
@@ -45,6 +45,7 @@ export class AuthController {
     @InjectRepository()
     private phoneVerificationRepository: PhoneVerificationRepository,
     private jwtService: JWTService,
+    private bcryptService: BcryptService,
     private smsService: SMSService,
   ) {}
 
@@ -109,7 +110,10 @@ export class AuthController {
     const newUser = new User();
 
     newUser.phoneNumber = phoneNumber;
+
+    password = await this.bcryptService.hashString(password);
     newUser.password = password;
+
     newUser.roles = [role];
     newUser.profile = new Profile();
     newUser.achievements = [];
@@ -446,6 +450,53 @@ export class AuthController {
       throw new ApiError(
         ApiErrorEnum.PHONE_VERIFICATION,
         "Ошибка подтверждения номера",
+      );
+    }
+  }
+
+  @Authorized(["user"])
+  @Post("/password")
+  public async changePassword(
+    @CurrentUser() user: User,
+    @BodyParam("oldPassword", { required: true })
+    oldPassword: string,
+    @BodyParam("newPassword", { required: true })
+    newPassword: string,
+  ) {
+    if (newPassword.length < 6 || newPassword.length > 24) {
+      throw new ApiError(
+        ApiErrorEnum.BAD_PASSWORD,
+        "Пароль должен быть от 6 до 24 символов",
+      );
+    }
+
+    newPassword = await this.bcryptService.hashString(newPassword);
+
+    const userWithPassoword = await this.userRepository
+      .createQueryBuilder("user")
+      .addSelect("user.password")
+      .where("user.uuid = :uuid", { uuid: user.uuid })
+      .getOne();
+
+    const oldPasswordIsCorrect = await userWithPassoword!.checkPassword(
+      oldPassword,
+    );
+
+    if (!oldPasswordIsCorrect) {
+      throw new ApiError(ApiErrorEnum.WRONG_PASSWORD, "Неверный пароль");
+    }
+
+    userWithPassoword!.password = newPassword;
+
+    try {
+      await this.userRepository.save(userWithPassoword!);
+      return new ApiResponse({ message: "Пароль успешно изменен" });
+    } catch (err) {
+      logger.error(err);
+      Raven.captureException(err);
+      throw new ApiError(
+        ApiErrorEnum.PASSWORD_CHANGE,
+        "Ошибка изменения пароля",
       );
     }
   }

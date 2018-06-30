@@ -1,7 +1,6 @@
 import { IsMobilePhone, MaxLength, MinLength } from "class-validator";
 import { Container } from "typedi";
 import {
-  BeforeInsert,
   Column,
   CreateDateColumn,
   Entity,
@@ -66,11 +65,5 @@ export class User {
   public async checkPassword(plainPassword: string): Promise<boolean> {
     const bcryptService = Container.get(BcryptService);
     return bcryptService.compareHash(plainPassword, this.password);
-  }
-
-  @BeforeInsert()
-  private async _hashPassword?() {
-    const bcryptService = Container.get(BcryptService);
-    this.password = await bcryptService.hashString(this.password);
   }
 }
