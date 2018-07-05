@@ -29,10 +29,18 @@ export class ApplicationController {
 
   @Get()
   @Authorized(["mentor"])
-  public async getApplications() {
-    const applications = await this.applicationRepository.getApplications();
+  public async getApplications(@CurrentUser() user: User) {
+    const isAdmin = await this.roleHelper.hasRole("admin", user.roles);
 
-    return new ApiResponse(applications);
+    if (isAdmin) {
+      const allApplications = await this.applicationRepository.getApplications();
+      return new ApiResponse(allApplications);
+    } else {
+      const mentorApplications = await this.applicationRepository.getMentorApplications(
+        user.uuid!,
+      );
+      return new ApiResponse(mentorApplications);
+    }
   }
 
   @Authorized(["mentor"])
@@ -60,40 +68,40 @@ export class ApplicationController {
 
     const isAdmin = await this.roleHelper.hasRole("admin", mentor.roles);
 
-    if (!isDirectionMentor || !isAdmin) {
+    if (isAdmin || isDirectionMentor) {
+      const user = application.user;
+      const direction = application.direction;
+      user.directions.push(direction);
+
+      const rating = new Rating();
+      rating.ratingOwner = user;
+      rating.direction = direction;
+      rating.value = 0;
+      rating.ratingTransactions = [];
+      user.userRatings.push(rating);
+
+      try {
+        await this.applicationRepository.remove(application);
+        await this.userRepository.save(user);
+        logger.info(
+          `Заявка от [${application.user.phoneNumber}] на направление "${
+            application.direction.name
+          }" принята ментором [${mentor.phoneNumber}]`,
+        );
+
+        return new ApiResponse({ message: "Заявка успешно подтверждена" });
+      } catch (err) {
+        logger.error(err);
+        Raven.captureException(err);
+        throw new ApiError(
+          ApiErrorEnum.APPLICATION_APPROVE,
+          "Ошибка принятия заявки",
+        );
+      }
+    } else {
       throw new ApiError(
         ApiErrorEnum.UNAUTHORIZED,
-        "Необходимо быть ментором данного направления для отклонения заявки",
-      );
-    }
-
-    const user = application.user;
-    const direction = application.direction;
-    user.directions.push(direction);
-
-    const rating = new Rating();
-    rating.ratingOwner = user;
-    rating.direction = direction;
-    rating.value = 0;
-    rating.ratingTransactions = [];
-    user.userRatings.push(rating);
-
-    try {
-      await this.applicationRepository.remove(application);
-      await this.userRepository.save(user);
-      logger.info(
-        `Заявка от [${application.user.phoneNumber}] на направление "${
-          application.direction.name
-        }" принята ментором [${mentor.phoneNumber}]`,
-      );
-
-      return new ApiResponse({ message: "Заявка успешно подтверждена" });
-    } catch (err) {
-      logger.error(err);
-      Raven.captureException(err);
-      throw new ApiError(
-        ApiErrorEnum.APPLICATION_APPROVE,
-        "Ошибка принятия заявки",
+        "Необходимо быть ментором данного направления для принятия заявки",
       );
     }
   }
@@ -123,28 +131,28 @@ export class ApplicationController {
 
     const isAdmin = await this.roleHelper.hasRole("admin", mentor.roles);
 
-    if (!isDirectionMentor || !isAdmin) {
+    if (isAdmin || isDirectionMentor) {
+      try {
+        await this.applicationRepository.remove(application);
+        logger.info(
+          `Заявка от [${application.user.phoneNumber}] на направление "${
+            application.direction.name
+          }" отклонена ментором [${mentor.phoneNumber}]`,
+        );
+
+        return new ApiResponse({ message: "Заявка успешно отклонена" });
+      } catch (err) {
+        logger.error(err);
+        Raven.captureException(err);
+        throw new ApiError(
+          ApiErrorEnum.APPLICATION_DECLINE,
+          "Ошибка отклонения заявки",
+        );
+      }
+    } else {
       throw new ApiError(
         ApiErrorEnum.UNAUTHORIZED,
         "Необходимо быть ментором данного направления для отклонения заявки",
-      );
-    }
-
-    try {
-      await this.applicationRepository.remove(application);
-      logger.info(
-        `Заявка от [${application.user.phoneNumber}] на направление "${
-          application.direction.name
-        }" отклонена ментором [${mentor.phoneNumber}]`,
-      );
-
-      return new ApiResponse({ message: "Заявка успешно отклонена" });
-    } catch (err) {
-      logger.error(err);
-      Raven.captureException(err);
-      throw new ApiError(
-        ApiErrorEnum.APPLICATION_DECLINE,
-        "Ошибка отклонения заявки",
       );
     }
   }

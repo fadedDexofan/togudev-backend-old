@@ -71,6 +71,7 @@ export class UserController {
     }
 
     const isMentor = await this.roleHelper.hasRole("mentor", user.roles);
+    const isAdmin = await this.roleHelper.hasRole("admin", user.roles);
 
     const publicRelations = [
       "directions",
@@ -84,7 +85,7 @@ export class UserController {
 
     let userProfile: User | undefined;
 
-    if (isMentor) {
+    if (isAdmin || isMentor) {
       userProfile = await this.userRepository.findOne(uuid, {
         relations: [...publicRelations, "mentorTransactions"],
       });

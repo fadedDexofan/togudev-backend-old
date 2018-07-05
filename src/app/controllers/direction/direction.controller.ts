@@ -53,10 +53,9 @@ export class DirectionController {
       });
     }
 
-    return new ApiResponse(directions);
+    return new ApiResponse(response);
   }
 
-  @HttpCode(201)
   @Authorized(["user"])
   @Post("/apply")
   public async applyToDirection(
@@ -64,6 +63,13 @@ export class DirectionController {
     @BodyParam("directionId", { required: true })
     directionId: number,
   ) {
+    if (!Number(directionId)) {
+      throw new ApiError(
+        ApiErrorEnum.NOT_A_NUMBER,
+        "directionId должен быть числом",
+      );
+    }
+
     const direction = await this.directionRepository.findOne(directionId);
 
     if (!direction) {
@@ -105,14 +111,14 @@ export class DirectionController {
         }] подал заявку на направление "${application.direction.name}"`,
       );
       return new ApiResponse({
-        message: "Заявка успешно создана",
+        message: "Заявка успешно подана",
       });
     } catch (err) {
       logger.error(err);
       Raven.captureException(err);
       throw new ApiError(
         ApiErrorEnum.APPLICATION_CREATE,
-        "Ошибка создания заявки",
+        "Ошибка подачи заявки",
       );
     }
   }
@@ -120,6 +126,10 @@ export class DirectionController {
   @Authorized(["user"])
   @Get("/:id")
   public async getDirection(@Param("id") id: number) {
+    if (!Number(id)) {
+      throw new ApiError(ApiErrorEnum.NOT_A_NUMBER, "id должен быть числом");
+    }
+
     const direction = await this.directionRepository.getDirectionById(id);
 
     if (!direction) {
@@ -138,6 +148,10 @@ export class DirectionController {
     @CurrentUser() user: User,
     @Param("id") id: number,
   ) {
+    if (!Number(id)) {
+      throw new ApiError(ApiErrorEnum.NOT_A_NUMBER, "id должен быть числом");
+    }
+
     const direction = await this.directionRepository.findOne(id);
 
     if (!direction) {
@@ -166,6 +180,10 @@ export class DirectionController {
     @BodyParam("mentorUuid", { required: true })
     mentorUuid: string,
   ) {
+    if (!isUUID(mentorUuid)) {
+      throw new ApiError(ApiErrorEnum.BAD_UUID, "Некорректный uuid");
+    }
+
     const dupDirection = await this.directionRepository.findOne({ name });
 
     if (dupDirection) {

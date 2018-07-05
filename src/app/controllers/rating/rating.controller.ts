@@ -50,9 +50,10 @@ export class RatingController {
     }
 
     const isMentor = await this.roleHelper.hasRole("mentor", user.roles);
+    const isAdmin = await this.roleHelper.hasRole("admin", user.roles);
     const isRatingOwner = rating.ratingOwner.uuid === user.uuid;
 
-    if (isMentor || isRatingOwner) {
+    if (isAdmin || isMentor || isRatingOwner) {
       return new ApiResponse(rating);
     } else {
       delete rating.ratingTransactions;
@@ -75,6 +76,13 @@ export class RatingController {
       throw new ApiError(ApiErrorEnum.BAD_UUID, "Некорректный uuid");
     }
 
+    if (!Number(valueChange)) {
+      throw new ApiError(
+        ApiErrorEnum.NOT_A_NUMBER,
+        "valueChange должен быть числом",
+      );
+    }
+
     const rating = await this.ratingRepository.findOne(uuid, {
       relations: ["ratingTransactions", "direction", "ratingOwner"],
     });
@@ -89,36 +97,36 @@ export class RatingController {
     );
     const isAdmin = await this.roleHelper.hasRole("admin", mentor.roles);
 
-    if (!isDirectionMentor || !isAdmin) {
+    if (isAdmin || isDirectionMentor) {
+      const transaction = new RatingTransaction();
+      transaction.author = mentor;
+      transaction.rating = rating;
+      transaction.reason = reason;
+      transaction.valueChange = valueChange;
+
+      rating.value += valueChange;
+
+      try {
+        await this.ratingRepository.save(rating);
+        await this.transactionRepository.save(transaction);
+        logger.info(
+          `Ментор [${mentor.phoneNumber}] изменил рейтинг пользователю [${
+            rating.ratingOwner.phoneNumber
+          }]`,
+        );
+        return new ApiResponse({ message: "Рейтинг успешно изменен" });
+      } catch (err) {
+        logger.error(err);
+        Raven.captureException(err);
+        throw new ApiError(
+          ApiErrorEnum.RATING_ADD,
+          "Не удалось увеличить рейтинг",
+        );
+      }
+    } else {
       throw new ApiError(
         ApiErrorEnum.UNAUTHORIZED,
-        "Для совершения этого действия необходимо быть ментором данного направления",
-      );
-    }
-
-    const transaction = new RatingTransaction();
-    transaction.author = mentor;
-    transaction.rating = rating;
-    transaction.reason = reason;
-    transaction.valueChange = valueChange;
-
-    rating.value += valueChange;
-
-    try {
-      await this.ratingRepository.save(rating);
-      await this.transactionRepository.save(transaction);
-      logger.info(
-        `Ментор [${mentor.phoneNumber}] изменил рейтинг пользователю [${
-          rating.ratingOwner.phoneNumber
-        }]`,
-      );
-      return new ApiResponse({ message: "Рейтинг успешно изменен" });
-    } catch (err) {
-      logger.error(err);
-      Raven.captureException(err);
-      throw new ApiError(
-        ApiErrorEnum.RATING_ADD,
-        "Не удалось увеличить рейтинг",
+        "Для изменения рейтинга необходимо быть ментором данного направления",
       );
     }
   }

@@ -6,7 +6,21 @@ export class ApiError extends HttpError {
   public message: string;
 
   constructor(code: ApiErrorEnum, message: string = "") {
-    super(200);
+    let httpCode;
+    if (code >= 100 && code < 200) {
+      httpCode = 400;
+    } else if (code >= 200 && code < 300) {
+      httpCode = 500;
+    } else if (code === 404) {
+      httpCode = 404;
+    } else if (code === 401) {
+      httpCode = 401;
+    } else {
+      httpCode = 400;
+    }
+
+    super(httpCode);
+
     Object.setPrototypeOf(this, ApiError.prototype);
     this.code = code;
     this.message = message;
