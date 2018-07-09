@@ -15,12 +15,14 @@ import { InjectRepository } from "typeorm-typedi-extensions";
 import { isMobilePhone } from "validator";
 
 import {
+  PasswordReset,
   PhoneVerification,
   Profile,
   RefreshToken,
   User,
 } from "../../../db/entities";
 import {
+  PasswordResetRepository,
   PhoneVerificationRepository,
   RefreshRepository,
   RoleRepository,
@@ -44,6 +46,8 @@ export class AuthController {
     @InjectRepository() private roleRepository: RoleRepository,
     @InjectRepository()
     private phoneVerificationRepository: PhoneVerificationRepository,
+    @InjectRepository()
+    private passwordResetRepository: PasswordResetRepository,
     private jwtService: JWTService,
     private bcryptService: BcryptService,
     private smsService: SMSService,
@@ -57,6 +61,7 @@ export class AuthController {
     password: string,
   ) {
     const phoneToken = this.jwtService.extractToken(headers);
+
     if (!phoneToken) {
       throw new ApiError(
         ApiErrorEnum.BAD_REGISTRATION_TOKEN,
@@ -76,9 +81,17 @@ export class AuthController {
       phoneNumber: string;
     }
 
-    const { phoneNumber } = (await this.jwtService.verify(
-      phoneToken,
-    )) as IPhoneToken;
+    let phoneNumber: string;
+
+    try {
+      const registerPayload = (await this.jwtService.verify(
+        phoneToken,
+      )) as IPhoneToken;
+
+      phoneNumber = registerPayload.phoneNumber;
+    } catch (err) {
+      throw new ApiError(ApiErrorEnum.JsonWebTokenError, err.message);
+    }
 
     const dupUser = await this.userRepository.getUserByPhone(phoneNumber);
     if (dupUser) {
@@ -404,13 +417,22 @@ export class AuthController {
     @BodyParam("phoneNumber", { required: true })
     phoneNumber: string,
     @BodyParam("verificationCode", { required: true })
-    verificationCode: number,
+    verificationCode: string,
   ) {
+    if (!isMobilePhone(phoneNumber, "ru-RU")) {
+      throw new ApiError(
+        ApiErrorEnum.BAD_PHONE,
+        "Номер телефона имеет некорректный формат",
+      );
+    }
+
     const searchResult = await this.phoneVerificationRepository.findOne({
       phoneNumber,
     });
 
-    const isCodeCorrect = verificationCode && !Number.isNaN(verificationCode);
+    const isCodeCorrect =
+      verificationCode && verificationCode.trim().match(/^\d{4}$/);
+
     if (!isCodeCorrect) {
       throw new ApiError(
         ApiErrorEnum.BAD_VERIFICATION_CODE,
@@ -498,6 +520,246 @@ export class AuthController {
         ApiErrorEnum.PASSWORD_CHANGE,
         "Ошибка изменения пароля",
       );
+    }
+  }
+
+  @Post("/password/reset")
+  public async passwordReset(
+    @BodyParam("phoneNumber", { required: true })
+    phoneNumber: string,
+  ) {
+    if (!isMobilePhone(phoneNumber, "ru-RU")) {
+      throw new ApiError(
+        ApiErrorEnum.BAD_PHONE,
+        "Номер телефона имеет некорректный формат",
+      );
+    }
+    const userExists = await this.userRepository.getUserByPhone(phoneNumber);
+
+    if (!userExists) {
+      throw new ApiError(
+        ApiErrorEnum.USER_DONT_EXISTS,
+        "Пользователь с данным номером телефона не найден",
+      );
+    }
+
+    const generatedCode = getRandomInt(1000, 10000);
+    let searchResult = await this.passwordResetRepository.findOne({
+      where: { phoneNumber },
+    });
+
+    if (!searchResult) {
+      const passwordResetRequest = new PasswordReset();
+      passwordResetRequest.phoneNumber = phoneNumber;
+      passwordResetRequest.verificationCode = generatedCode;
+      passwordResetRequest.attempts = 0;
+      searchResult = await this.passwordResetRepository.create(
+        passwordResetRequest,
+      );
+    }
+
+    const { attempts: triesCount, updatedAt } = searchResult;
+
+    const diffSeconds = moment().diff(moment(updatedAt), "s");
+
+    if (triesCount === 1 && diffSeconds < 60) {
+      throw new ApiError(
+        ApiErrorEnum.SMS_MINUTE_LIMIT,
+        "Превышено количество СМС в минуту",
+      );
+    } else {
+      searchResult.attempts = 0;
+    }
+
+    searchResult.attempts += 1;
+    searchResult.verificationCode = generatedCode;
+
+    try {
+      await this.passwordResetRepository.save(searchResult);
+    } catch (err) {
+      logger.error(err);
+      Raven.captureException(err);
+      throw new ApiError(
+        ApiErrorEnum.PASSWORD_RESET_CREATE,
+        "Ошибка создания заявки на сброс пароля",
+      );
+    }
+
+    try {
+      const smsTask = await this.smsService.sendSMS(
+        phoneNumber,
+        `Код для сброса пароля: ${generatedCode}`,
+      );
+
+      if (smsTask === 100) {
+        logger.info(
+          `СМС подтверждение для сброса пароля отправлено на номер [${phoneNumber}]`,
+        );
+        return new ApiResponse({
+          message: `Проверочный код отправлен на номер ${phoneNumber}`,
+        });
+      } else {
+        logger.warn(
+          `Не удалось отправить СМС подтверждение на номер [${phoneNumber}]. Код ошибки: ${smsTask}`,
+        );
+        throw new Error(
+          `Не удалось отправить СМС сообщение. status_code: ${smsTask}`,
+        );
+      }
+    } catch (err) {
+      logger.error(err);
+      Raven.captureException(err);
+      throw new ApiError(
+        ApiErrorEnum.SMS_SEND,
+        "Ошибка отправки SMS сообщения",
+      );
+    }
+  }
+
+  @Post("/password/reset/confirm")
+  public async confirmPasswordReset(
+    @BodyParam("phoneNumber", { required: true })
+    phoneNumber: string,
+    @BodyParam("verificationCode", { required: true })
+    verificationCode: string,
+  ) {
+    if (!isMobilePhone(phoneNumber, "ru-RU")) {
+      throw new ApiError(
+        ApiErrorEnum.BAD_PHONE,
+        "Номер телефона имеет некорректный формат",
+      );
+    }
+
+    const searchResult = await this.passwordResetRepository.findOne({
+      phoneNumber,
+    });
+
+    const isCodeCorrect =
+      verificationCode && verificationCode.trim().match(/^\d{4}$/);
+
+    if (!isCodeCorrect) {
+      throw new ApiError(
+        ApiErrorEnum.BAD_VERIFICATION_CODE,
+        "Не указан проверочный код или код имеет неверный формат",
+      );
+    }
+
+    if (!searchResult) {
+      throw new ApiError(
+        ApiErrorEnum.PASSWORD_RESET_NOTFOUND,
+        "Заявка на сброс пароля не найдена",
+      );
+    }
+
+    const isCodeWrong =
+      searchResult.verificationCode !== Number(verificationCode);
+
+    if (isCodeWrong) {
+      throw new ApiError(
+        ApiErrorEnum.WRONG_PASSWORD_RESET_CODE,
+        "Указан неверный проверочный код",
+      );
+    }
+
+    try {
+      const passwordResetToken = await this.jwtService.sign(
+        { passwordResetToken: true, phoneNumber },
+        { algorithm: "HS512", expiresIn: "1d" },
+      );
+
+      searchResult.verificationToken = passwordResetToken;
+      await this.passwordResetRepository.save(searchResult);
+
+      logger.info(`Заявка на сброс пароля для [${phoneNumber}] подтверждена`);
+
+      return new ApiResponse({ passwordResetToken });
+    } catch (err) {
+      logger.error(err);
+      Raven.captureException(err);
+      throw new ApiError(
+        ApiErrorEnum.PASSWORD_RESET_CONFIRM,
+        "Ошибка подтверждения сброса пароля",
+      );
+    }
+  }
+
+  @Post("/password/reset/change")
+  public async setNewPassword(
+    @HeaderParams() headers: any,
+    @BodyParam("newPassword", { required: true })
+    newPassword: string,
+  ) {
+    const passwordResetToken = this.jwtService.extractToken(headers);
+
+    if (!passwordResetToken) {
+      throw new ApiError(
+        ApiErrorEnum.BAD_PASSWORD_RESET_TOKEN,
+        "Не передан токен сброса пароля или он имеет неверный формат. Используйте Authorization: Bearer <token>",
+      );
+    }
+
+    if (newPassword.length < 6 || newPassword.length > 24) {
+      throw new ApiError(
+        ApiErrorEnum.BAD_PASSWORD,
+        "Пароль должен быть от 6 до 24 символов",
+      );
+    }
+
+    interface IPasswordResetToken {
+      passwordResetToken: boolean;
+      phoneNumber: string;
+    }
+
+    let phoneNumber: string;
+
+    try {
+      const resetTokenPayload = (await this.jwtService.verify(
+        passwordResetToken,
+      )) as IPasswordResetToken;
+
+      phoneNumber = resetTokenPayload.phoneNumber;
+    } catch (err) {
+      throw new ApiError(ApiErrorEnum.JsonWebTokenError, err.message);
+    }
+
+    const resetRequest = await this.passwordResetRepository.findOne({
+      where: { verificationToken: passwordResetToken },
+    });
+
+    if (!resetRequest) {
+      throw new ApiError(
+        ApiErrorEnum.PASSWORD_RESET_REQUEST_NOTFOUND,
+        "Заявка на сброс для данного токена не найдена",
+      );
+    }
+
+    const user = await this.userRepository
+      .createQueryBuilder("user")
+      .addSelect("user.password")
+      .where("user.phoneNumber = :phoneNumber", { phoneNumber })
+      .getOne();
+
+    if (!user) {
+      throw new ApiError(
+        ApiErrorEnum.NOT_FOUND,
+        "Пользователь с таким логином не найден",
+      );
+    }
+
+    user.password = await this.bcryptService.hashString(newPassword);
+
+    try {
+      await this.userRepository.save(user);
+      await this.passwordResetRepository.remove(resetRequest);
+      logger.info(
+        `Пользователь [${user.phoneNumber}] сбросил и изменил пароль`,
+      );
+
+      return new ApiResponse({ message: "Пароль успешно изменен" });
+    } catch (err) {
+      logger.error(err);
+      Raven.captureException(err);
+      throw new ApiError(ApiErrorEnum.PASSWORD_RESET, "Ошибка сброса пароля");
     }
   }
 }
