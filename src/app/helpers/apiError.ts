@@ -7,7 +7,9 @@ export class ApiError extends HttpError {
 
   constructor(code: ApiErrorEnum, message: string = "") {
     let httpCode;
-    if (code >= 100 && code < 200) {
+    if (code === 118 || code === 114) {
+      httpCode = 401;
+    } else if (code >= 100 && code < 200) {
       httpCode = 400;
     } else if (code >= 200 && code < 300) {
       httpCode = 500;
