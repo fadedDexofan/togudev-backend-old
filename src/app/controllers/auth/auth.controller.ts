@@ -922,7 +922,10 @@ export class AuthController {
       } catch (err) {
         logger.error(err);
         Raven.captureException(err);
-        throw new ApiError(ApiErrorEnum.PHONE_CHANGE_REMOVE);
+        throw new ApiError(
+          ApiErrorEnum.PHONE_CHANGE_REMOVE,
+          "Ошибка удаления заявки на смену номера",
+        );
       }
       throw new ApiError(
         ApiErrorEnum.PHONE_ALREADY_TAKEN,
