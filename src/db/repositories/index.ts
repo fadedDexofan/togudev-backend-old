@@ -8,3 +8,4 @@ export * from "./application.repository";
 export * from "./ratingTransaction.repository";
 export * from "./achievement.repository";
 export * from "./passwordReset.repository";
+export * from "./phoneChange.repository";

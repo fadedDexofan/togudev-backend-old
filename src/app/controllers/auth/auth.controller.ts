@@ -16,6 +16,7 @@ import { isMobilePhone } from "validator";
 
 import {
   PasswordReset,
+  PhoneChange,
   PhoneVerification,
   Profile,
   RefreshToken,
@@ -23,6 +24,7 @@ import {
 } from "../../../db/entities";
 import {
   PasswordResetRepository,
+  PhoneChangeRepository,
   PhoneVerificationRepository,
   RefreshRepository,
   RoleRepository,
@@ -48,6 +50,7 @@ export class AuthController {
     private phoneVerificationRepository: PhoneVerificationRepository,
     @InjectRepository()
     private passwordResetRepository: PasswordResetRepository,
+    @InjectRepository() private phoneChangeRepository: PhoneChangeRepository,
     private jwtService: JWTService,
     private bcryptService: BcryptService,
     private smsService: SMSService,
@@ -313,7 +316,7 @@ export class AuthController {
     @BodyParam("phoneNumber", { required: true })
     phoneNumber: string,
   ) {
-    const generatedCode = getRandomInt(1000, 10000);
+    const generatedCode = getRandomInt(10000, 100000);
 
     if (!isMobilePhone(phoneNumber, "ru-RU")) {
       throw new ApiError(
@@ -431,7 +434,7 @@ export class AuthController {
     });
 
     const isCodeCorrect =
-      verificationCode && verificationCode.trim().match(/^\d{4}$/);
+      verificationCode && verificationCode.trim().match(/^\d{5}$/);
 
     if (!isCodeCorrect) {
       throw new ApiError(
@@ -534,6 +537,7 @@ export class AuthController {
         "Номер телефона имеет некорректный формат",
       );
     }
+
     const userExists = await this.userRepository.getUserByPhone(phoneNumber);
 
     if (!userExists) {
@@ -543,7 +547,8 @@ export class AuthController {
       );
     }
 
-    const generatedCode = getRandomInt(1000, 10000);
+    const generatedCode = getRandomInt(10000, 100000);
+
     let searchResult = await this.passwordResetRepository.findOne({
       where: { phoneNumber },
     });
@@ -559,7 +564,7 @@ export class AuthController {
     }
 
     const { attempts: triesCount, updatedAt } = searchResult;
-
+    const diffDays = moment().diff(moment(updatedAt), "d");
     const diffSeconds = moment().diff(moment(updatedAt), "s");
 
     if (triesCount === 1 && diffSeconds < 60) {
@@ -567,8 +572,17 @@ export class AuthController {
         ApiErrorEnum.SMS_MINUTE_LIMIT,
         "Превышено количество СМС в минуту",
       );
-    } else {
-      searchResult.attempts = 0;
+    }
+
+    if (triesCount >= 3) {
+      if (diffDays < 1) {
+        throw new ApiError(
+          ApiErrorEnum.SMS_DAILY_LIMIT,
+          "Превышено количество СМС в сутки",
+        );
+      } else {
+        searchResult.attempts = 0;
+      }
     }
 
     searchResult.attempts += 1;
@@ -635,7 +649,7 @@ export class AuthController {
     });
 
     const isCodeCorrect =
-      verificationCode && verificationCode.trim().match(/^\d{4}$/);
+      verificationCode && verificationCode.trim().match(/^\d{5}$/);
 
     if (!isCodeCorrect) {
       throw new ApiError(
@@ -760,6 +774,186 @@ export class AuthController {
       logger.error(err);
       Raven.captureException(err);
       throw new ApiError(ApiErrorEnum.PASSWORD_RESET, "Ошибка сброса пароля");
+    }
+  }
+
+  @Authorized(["user"])
+  @Post("/phone/change")
+  public async phoneChange(
+    @CurrentUser() user: User,
+    @BodyParam("newPhone", { required: true })
+    newPhone: string,
+  ) {
+    if (!isMobilePhone(newPhone, "ru-RU")) {
+      throw new ApiError(
+        ApiErrorEnum.BAD_PHONE,
+        "Номер телефона имеет некорректный формат",
+      );
+    }
+
+    const alreadyTaken = await this.userRepository.getUserByPhone(newPhone);
+
+    if (alreadyTaken) {
+      throw new ApiError(
+        ApiErrorEnum.PHONE_ALREADY_TAKEN,
+        "Указанный номер телефона уже занят",
+      );
+    }
+
+    const generatedCode = getRandomInt(10000, 100000);
+
+    let searchResult = await this.phoneChangeRepository.findOne({
+      where: { oldPhone: user.phoneNumber },
+    });
+
+    if (!searchResult) {
+      const phoneChangeRequest = new PhoneChange();
+      phoneChangeRequest.oldPhone = user.phoneNumber;
+      phoneChangeRequest.newPhone = newPhone;
+      phoneChangeRequest.verificationCode = generatedCode;
+      phoneChangeRequest.attempts = 0;
+      searchResult = await this.phoneChangeRepository.create(
+        phoneChangeRequest,
+      );
+    }
+
+    const { attempts: triesCount, updatedAt } = searchResult;
+    const diffDays = moment().diff(moment(updatedAt), "d");
+    const diffSeconds = moment().diff(moment(updatedAt), "s");
+
+    if (triesCount === 1 && diffSeconds < 60) {
+      throw new ApiError(
+        ApiErrorEnum.SMS_MINUTE_LIMIT,
+        "Превышено количество СМС в минуту",
+      );
+    }
+
+    if (triesCount >= 3) {
+      if (diffDays < 1) {
+        throw new ApiError(
+          ApiErrorEnum.SMS_DAILY_LIMIT,
+          "Превышено количество СМС в сутки",
+        );
+      } else {
+        searchResult.attempts = 0;
+      }
+    }
+
+    searchResult.attempts += 1;
+    searchResult.verificationCode = generatedCode;
+
+    try {
+      await this.phoneChangeRepository.save(searchResult);
+    } catch (err) {
+      logger.error(err);
+      Raven.captureException(err);
+      throw new ApiError(
+        ApiErrorEnum.PHONE_CHANGE_CREATE,
+        "Ошибка создания заявки на изменение номера",
+      );
+    }
+
+    try {
+      const smsTask = await this.smsService.sendSMS(
+        newPhone,
+        `Код для изменение номера: ${generatedCode}`,
+      );
+
+      if (smsTask === 100) {
+        logger.info(
+          `СМС подтверждение для смены номера телефона отправлено на номер [${newPhone}]`,
+        );
+        return new ApiResponse({
+          message: `Проверочный код отправлен на номер ${newPhone}`,
+        });
+      } else {
+        logger.warn(
+          `Не удалось отправить СМС подтверждение на номер [${newPhone}]. Код ошибки: ${smsTask}`,
+        );
+        throw new Error(
+          `Не удалось отправить СМС сообщение. status_code: ${smsTask}`,
+        );
+      }
+    } catch (err) {
+      logger.error(err);
+      Raven.captureException(err);
+      throw new ApiError(
+        ApiErrorEnum.SMS_SEND,
+        "Ошибка отправки SMS сообщения",
+      );
+    }
+  }
+
+  @Authorized(["user"])
+  @Post("/phone/change/confirm")
+  public async phoneChangeConfirm(
+    @CurrentUser() user: User,
+    @BodyParam("verificationCode", { required: true })
+    verificationCode: string,
+  ) {
+    const isCodeCorrect =
+      verificationCode && verificationCode.trim().match(/^\d{5}$/);
+
+    if (!isCodeCorrect) {
+      throw new ApiError(
+        ApiErrorEnum.BAD_VERIFICATION_CODE,
+        "Не указан проверочный код или код имеет неверный формат",
+      );
+    }
+
+    const searchResult = await this.phoneChangeRepository.findOne({
+      where: { oldPhone: user.phoneNumber },
+    });
+
+    if (!searchResult) {
+      throw new ApiError(
+        ApiErrorEnum.PHONE_CHANGE_NOTFOUND,
+        "Заявка на изменение номера не найдена",
+      );
+    }
+
+    const alreadyTaken = await this.userRepository.getUserByPhone(
+      searchResult.newPhone,
+    );
+
+    if (alreadyTaken) {
+      try {
+        await this.phoneChangeRepository.remove(searchResult);
+      } catch (err) {
+        logger.error(err);
+        Raven.captureException(err);
+        throw new ApiError(ApiErrorEnum.PHONE_CHANGE_REMOVE);
+      }
+      throw new ApiError(
+        ApiErrorEnum.PHONE_ALREADY_TAKEN,
+        "Указанный номер телефона уже занят. Заявка удалена.",
+      );
+    }
+
+    const isCodeWrong =
+      searchResult.verificationCode !== Number(verificationCode);
+
+    if (isCodeWrong) {
+      throw new ApiError(
+        ApiErrorEnum.WRONG_PHONE_CHANGE_CODE,
+        "Указан неверный проверочный код",
+      );
+    }
+
+    try {
+      user.phoneNumber = searchResult.newPhone;
+      await this.userRepository.save(user);
+
+      return new ApiResponse({
+        message: `Ваш номер успешно изменен на ${user.phoneNumber}`,
+      });
+    } catch (err) {
+      logger.error(err);
+      Raven.captureException(err);
+      throw new ApiError(
+        ApiErrorEnum.PHONE_CHANGE_CONFIRM,
+        "Ошибка изменения номера",
+      );
     }
   }
 }

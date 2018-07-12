@@ -9,3 +9,4 @@ export * from "./phoneVerification.entity";
 export * from "./application.entity";
 export * from "./achievement.entity";
 export * from "./passwordReset.entity";
+export * from "./phoneChange.entity";
